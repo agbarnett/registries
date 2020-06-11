@@ -1,0 +1,83 @@
+---
+title: "ANZCTR summary: ethics"
+author: "Adrian Barnett"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  word_document: default
+pdf_document: default
+---
+  
+```{r setup, include=FALSE}
+# using formatting in Word document (see above)
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message=FALSE, error=FALSE, comment='', dpi=400)
+options(width=1000) # Wide pages
+options(scipen=999) # avoid scientific presentation
+library(dplyr)
+library(broom)
+library(survival)
+library(stringr)
+library(visdat) # for missing data
+library(ggplot2)
+library(survminer)
+library(summarytools)
+# global options for summary tools
+st_options(plain.ascii = FALSE,       # Always use this option in Rmd documents
+            style = "rmarkdown",        # This too
+            round.digits = 0, 
+            headings = FALSE, 
+            footnote = NA,             # Avoids footnotes which would clutter the results
+            subtitle.emphasis = FALSE  # Improves layout with some rmardown themes
+) 
+
+# graphics things:
+g.theme = theme_bw() + theme(panel.grid.minor = element_blank())
+cbPalette <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#999999", "#CC79A7")
+
+# get the data
+load('data/AnalysisReady.RData') # from 0_read_data.R 
+```
+
+# Ethics status
+```{r}
+with(studies, freq(ethics_review, cumul = FALSE, report.nas =FALSE, order='freq')) 
+```
+
+
+# Top ten ethics committees
+
+```{r, results='asis'}
+freq = group_by(ethics_data, name) %>%
+  summarise(n = n()) %>%
+  ungroup() %>%
+  arrange(-n) %>%
+  slice(1:10) # just top ten
+to.table = mutate(ethics_data,
+                  name = ifelse(name %in% freq$name, name, 'Other')) # replace those outside top 10 with 'other'
+with(to.table, freq(name, cumul = FALSE, report.nas =FALSE, order='freq')) 
+```
+
+There are `r length(unique(ethics_data$name))` committees, hence we just show the top ten.
+
+## Number of errors in dates
+
+```{r}
+# to do Add study information
+to_model = filter(ethics_data, time != -99) %>% # remove missing 
+  mutate(error = as.numeric(time<0),
+         error = factor(error, levels=c(0,1), labels=c('No','Yes')))
+with(to_model, freq(error, cumul = FALSE, report.nas =FALSE, order='freq')) 
+```
+
+## Survival model
+
+```{r}
+to_model = filter(to_model, time>=0) %>%
+  mutate(timey = time/365.25) # time in years
+km = survfit(Surv(time=timey, event=event)~1, data=to_model)
+# Basic survival curves
+ggsurvplot(km, data = to_model, ylab='Survival', xlab='Time, years', legend='none')
+# stats
+stats = surv_median(km)
+```
+
+The median time to get approval was `r round(stats$median*365.25)` days, with a 95% confidence interval of `r round(stats$lower*365.25)` to `r round(stats$upper*365.25)` days.

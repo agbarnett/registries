@@ -1,0 +1,134 @@
+---
+title: "ANZCTR dumped"
+author: "Adrian Barnett"
+date: "22/05/2020"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# dumped from ANZCTR summary
+
+```{r}
+    decade = case_when(
+            is.na(year) ~ 'Missing',
+            year < 2000 ~ "Pre 2000",
+            year >= 2000 & year <2005 ~ "2000 to 2004",
+            year >= 2005 & year <2010 ~ "2005 to 2009",
+            year >= 2010 & year <2015 ~ "2010 to 2014",
+            year >= 2015 ~ "2015 or after",
+          ),
+```
+
+## Elastic net
+
+```{r}
+library(glmnet)
+# set up variables
+ff = log2(samplesize+1) ~ gender + studytype + phase + masking + decade
+m <- model.frame(ff, for.model)
+mat <- model.matrix(ff, m)
+y = log2(for.model$samplesize+1)
+smodel = glmnet(y=y, x=mat, alpha=0.95)
+plot(smodel)
+```
+
+```{r}
+cvfit = cv.glmnet(x=mat, y=y)
+plot(cvfit)
+```
+
+```{r}
+coef(cvfit, s = "lambda.1se")
+```
+
+
+```{r}
+library(selectiveInference)
+result = randomizedLasso(X=mat, y=y, lam=0.95)
+inf_result = randomizedLassoInf(result)
+```
+
+### Plot of mean sample size by phase
+
+The plot shows the predicted mean from the regression model with 95% confidence intervals.
+
+```{r}
+# plot predictions
+pred = dplyr::select(for.model, gender, phase, studytype, masking) %>%
+  unique() %>%
+  mutate(date  = 0) # reference value
+fit = predict(smodel, newdata=pred, se.fit = TRUE)
+z = qnorm(0.975)
+pred$fit = fit$fit
+pred$se = fit$se.fit
+pred = mutate(pred, 
+   lower = fit - (z*se),
+   upper = fit + (z*se),
+   fit = (2^fit) -1, # back transform
+   lower = (2^lower) -1,
+   upper = (2^upper) -1)
+# select data to plot
+to.plot = filter(pred, gender=='Both males and females',
+                       studytype=='Interventional',
+                       masking == 'Blinded (masking used)')
+pplot = ggplot(data=to.plot , aes(x=phase, y=fit, ymin=lower, ymax=upper))+
+  geom_point()+
+  geom_errorbar(width=0)+
+  g.theme+
+  coord_flip()+
+  xlab('')+
+  ylab('Sample size')
+pplot
+```
+
+
+## Principal components analysis
+
+```{r}
+library(PCAmixdata)
+# to do: would be better to turn age_min and age_max into numbers
+# not needed for PCA - remove free text condition
+for.pca = select(studies, -pub, -year, -time, -ID, -id, -address, -number, -condition) 
+# split by continuous and categorical
+split <- splitmix(for.pca) # split into quant and qual data
+X1 <- split$X.quanti 
+X2 <- split$X.quali 
+res.pcamix <- PCAmix(X.quanti=X1, X.quali=X2, rename.level=TRUE, graph=FALSE)
+```
+
+```{r}
+# plot the PCA results
+par(mfrow=c(2,2))
+plot(res.pcamix,choice="ind",coloring.ind=X2$houses,label=FALSE,
+      posleg="bottomright", main="Observations")
+plot(res.pcamix, choice="levels", xlim=c(-1.5,2.5), main="Levels")
+plot(res.pcamix, choice="cor", main="Numerical variables")
+plot(res.pcamix, choice="sqload", coloring.var=T, leg=TRUE,
+     posleg="topright", main="All variables")
+```
+
+### Funders, top combinations
+
+```{r, results='asis'}
+# get combinations 
+combs <-  dplyr::select(funding_data, number, name)  %>%
+  as_tibble() %>%
+  filter(!is.na(name))
+# now make list from group responses
+list_resp = group_by(combs, number) %>%
+  summarise(responses = list(name))
+# plot
+cplot = ggplot(list_resp, aes(x = responses)) +
+    geom_bar(aes(y=..count../sum(..count..)), fill = "indianred3") +
+    theme_bw() +
+    xlab("Funders") +
+    ylab("Proportion of studies") +
+    scale_x_upset(n_intersections = 10)+
+    g.theme+
+  theme(text=element_text(size=14),
+        plot.margin = margin(t = 0, r = 0, b = 0, l = 120, unit = "pt")) # extend margin for labels
+cplot
+```

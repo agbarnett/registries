@@ -1,0 +1,489 @@
+---
+title: "Summary of the data from clinicaltrials.gov"
+author: "Adrian Barnett"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  word_document: 
+    toc: true
+    toc_depth: 2
+    reference_docx: rmarkdown-styles-reference.docx
+---
+
+```{r setup, include=FALSE}
+# using formatting in Word document (see above)
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message=FALSE, error=FALSE, comment='', dpi=400)
+options(width=1000) # Wide pages
+options(scipen=999) # avoid scientific presentation
+library(klaR) # for k-modes clustering
+library(dplyr)
+library(broom)
+library(stringr)
+library(visdat) # for missing data
+library(ggplot2)
+library(gridExtra)
+library(ggupset) # to plot combination of study characteristics
+library(pander)
+library(summarytools)
+# global options for summary tools
+st_options(plain.ascii = FALSE,       # Always use this option in Rmd documents
+            style = "rmarkdown",        # This too
+            round.digits = 0, 
+            headings = FALSE, 
+            footnote = NA,             # Avoids footnotes which would clutter the results
+            subtitle.emphasis = FALSE  # Improves layout with some rmardown themes
+) 
+
+# graphics things:
+g.theme = theme_bw() + theme(panel.grid.minor = element_blank())
+cbPalette <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#999999", "#CC79A7")
+
+# get the data
+load('data/clinicaltrials_analysis_ready.RData') # from 1_process_clintrials_data.R 
+```
+
+There were `r length(excluded)` studies excluded.
+The total number of remaining studies is `r format(nrow(studies),big.mark=',')`. 
+The data were extracted from clinicaltrials.gov on `r censor.date`.
+
+# Missing data
+
+The columns are variables and the rows are observations.
+The grey areas show missing data.
+The plot shows a random sample of 10,000 observations.
+
+```{r, fig.width=8}
+for.missing = dplyr::select(studies, -id, -starts_with('n_')) %>%
+  sample_n(size=10000) # too big so take a random sample
+vis_dat(for.missing)
+```
+
+# Registration and dates
+
+## Registration dates
+
+```{r, results='asis'}
+dates = select(studies, posted, updated, completed, results) %>%
+  tidyr::gather(key='date', value='res') %>%
+  group_by(date) %>%
+  filter(!is.na(res)) %>% # remove missing
+  summarise(n=n(), 
+            median = median(res), 
+            q1 = as.Date(quantile(unclass(res), 0.25), origin = "1970-01-01"),
+            q3 = as.Date(quantile(unclass(res), 0.75), origin = "1970-01-01")) %>%
+  mutate(date = factor(date, levels=c('posted','updated','completed','results')),
+         n = format(n,big.mark = ','),
+         median = as.Date(median, origin='1970-01-01')) %>% # For row ordering
+  arrange(date)
+pander(dates, style='simple')
+```
+
+The summary statistics are the median and inter-quartile range.
+
+# Inclusions/Exclusions
+
+## Gender included
+
+```{r, results='asis'}
+with(studies, freq(gender, cumul = FALSE, report.nas =TRUE))
+```
+
+## Age included
+
+#### Minimum age
+
+```{r, results='asis'}
+with(studies, freq(age_min_type, cumul = FALSE, report.nas =TRUE, order='freq'))
+```
+
+#### Minimum age limit in years
+
+```{r}
+# split by age
+to.plot = filter(studies, !is.na(age_min)) 
+# round to years for over 1
+over_1 = filter(to.plot, age_min >=1) %>%
+  mutate(age_min = round(age_min)) %>%
+  group_by(age_min) %>%
+  summarise(n = n()) %>%
+  ungroup()
+# round to months for under 1
+under_1 = filter(to.plot, age_min < 1) %>%
+  mutate(age_min = floor(age_min*12)) %>%
+  group_by(age_min) %>%
+  summarise(n = n()) %>%
+  ungroup()
+# separate plots
+hplot1 = ggplot(under_1, aes(x=age_min, y=n))+
+  geom_histogram(fill='darkseagreen', stat='identity')+
+  scale_x_continuous(breaks=0:12)+
+  xlab('Minimum age (months)')+
+  ylab('Count')+
+  g.theme+
+  ggtitle('Age under 1')
+hplot2 = ggplot(over_1, aes(x=age_min, y=n))+
+  geom_histogram(fill='darkseagreen', stat='identity')+
+  xlab('Minimum age (years)')+
+  ylab('Count')+
+  g.theme+
+  ggtitle('Age 1 and over')
+# combine plot
+grid.arrange(hplot1, hplot2, ncol=2)
+```
+
+This plot is just for studies that had a minimum age limit.
+
+#### Maximum age
+
+```{r, results='asis'}
+with(studies, freq(age_max_type, cumul = FALSE, report.nas =TRUE, order='freq'))
+```
+
+#### Maximum age limit in years
+
+```{r}
+# split by age
+to.plot = filter(studies, !is.na(age_max)) 
+# round to years for over 1
+over_1 = filter(to.plot, age_max >=1) %>%
+  mutate(age_max = round(age_max)) %>%
+  group_by(age_max) %>%
+  summarise(n = n()) %>%
+  ungroup()
+# round to months for under 1
+under_1 = filter(to.plot, age_max < 1) %>%
+  mutate(age_max = floor(age_max*12)) %>%
+  group_by(age_max) %>%
+  summarise(n = n()) %>%
+  ungroup()
+# separate plots
+hplot1 = ggplot(under_1, aes(x=age_max, y=n))+
+  geom_histogram(fill='dodgerblue', stat='identity')+
+  scale_x_continuous(breaks=0:12)+
+  xlab('Maximum age (months)')+
+  ylab('Count')+
+  g.theme+
+  ggtitle('Age under 1')
+hplot2 = ggplot(over_1, aes(x=age_max, y=n))+
+  geom_histogram(fill='dodgerblue', stat='identity')+
+  xlab('Maximum age (years)')+
+  ylab('Count')+
+  g.theme+
+  ggtitle('Age 1 and over')
+# combine plot
+grid.arrange(hplot1, hplot2, ncol=2)
+```
+
+This plot is just for studies that had a maximum age limit.
+
+# Study characteristics
+
+## Study type
+
+```{r, results='asis'}
+with(studies, freq(study_type, cumul = FALSE, report.nas =TRUE, order='freq'))
+```
+
+## Purpose
+
+```{r, results='asis'}
+with(studies, freq(purpose, cumul = FALSE, report.nas =TRUE, order='freq'))
+```
+
+## Masking
+
+```{r, results='asis'}
+with(studies, freq(masking, cumul = FALSE, report.nas =TRUE, order='freq'))
+```
+
+## Assignment
+
+```{r, results='asis'}
+with(studies, freq(assignment, cumul = FALSE, report.nas =TRUE, order='freq'))
+```
+
+## Phase
+
+```{r, results='asis'}
+with(studies, freq(phase, cumul = FALSE, report.nas =TRUE))
+```
+
+## Number of outcomes
+
+```{r, results='asis'}
+# could add 10% and 90%?
+to.summary = select(studies, n_primary, n_secondary)
+descr(to.summary, stats=c('fivenum'))
+```
+
+Number of primary and secondary outcomes.
+A small number of studies had a huge number of outcomes.
+
+
+# Study status
+
+```{r, results='asis'}
+with(studies, freq(status, cumul = FALSE, report.nas =FALSE, order='freq')) 
+```
+
+
+# Length of description
+
+```{r, results='asis'}
+to.summary = select(studies, description_nchar)
+descr(to.summary, stats=c('N.valid','Min','Q1','Med','Q3','Max'))
+```
+
+This is the number of characters written in the description section.
+
+# Funding
+
+### Lead sponsor type
+
+```{r, results='asis'}
+with(studies, freq(lead_sponsor_class, cumul = FALSE, report.nas =FALSE, order='freq'))
+```
+
+
+# Sample size
+
+## Actual and achieved sample size
+
+```{r, results='asis'}
+sample = select(studies, status, sample_size, sample_size_type) %>%
+  filter(!status=='Withdrawn' | sample_size_type =='Anticipated') # exclude those withdrawn with an actual sample size (often zero)
+stby(data = sample, 
+           INDICES = sample$sample_size_type, 
+           FUN = descr, stats = "fivenum", transpose = TRUE)
+zero.studies = nrow(filter(studies, sample_size == 0))
+```
+
+The table shows summary statistics.
+
+There were `r zero.studies` studies with a zero sample size.
+
+
+## Histogram of sample size
+
+```{r, fig.width=8}
+exclude_large = filter(studies, sample_size < 2000) # exclude extremely large genetics study
+
+#
+hplot = ggplot(exclude_large, aes(x=sample_size))+
+  geom_histogram(fill='chocolate1')+
+  xlab('Sample size')+
+  g.theme+
+  facet_wrap(~sample_size_type, scales='free_y')
+hplot
+```
+
+The plot above is for the `r format(nrow(exclude_large), big.mark=',')` studies with a target sample size under 2,000.
+
+
+### Histogram looking for digit preference in target sample size
+
+```{r, fig.width=8}
+# exclude huge studies
+exclude_large = filter(studies, sample_size <= 200) # exclude extremely large genetics study
+# frequency
+digits = group_by(exclude_large, sample_size_type, sample_size) %>%
+  summarise(n=n()) %>%
+  ungroup() 
+top_five = group_by(digits, sample_size_type) %>% # per type (facet)
+  arrange(-n) %>%
+  slice(1:5) %>% # top 5 per facet
+  ungroup()
+# plot
+hplot = ggplot(digits, aes(x=sample_size, y=n))+
+  geom_bar(stat="identity", col='chocolate2')+
+  xlab('Sample size')+
+  ylab('Count')+
+  geom_label(data=top_ten, aes(x=sample_size, y=n, label=sample_size))+
+  g.theme+
+  facet_wrap(~sample_size_type, scales='free_y')
+hplot
+jpeg('figures/digit_preference_clintrials.jpg', width=5, height=4, units='in', res=300)
+print(hplot)
+invisible(dev.off())
+```
+
+The plot above is for the `r format(nrow(exclude_large), big.mark=',')` studies with a target sample size of 200 or fewer.
+
+There is a strong digit preference at multiples of ten. The modal sample size is `r digits$samplesize_target[1]`. The top five sample sizes are shown for each sample size type.
+
+
+## Multiple regression model of sample size
+
+```{r}
+# check if results are already available
+is_results = length(dir('results', pattern = 'clintrials_sample_size')) > 0
+if(is_results == TRUE){
+  load('results/clintrials_sample_size.RData')
+}
+if(is_results == FALSE){
+  source('2_elasticnet_model_samplesize_clintrial.R')
+}
+```
+
+```{r, fig.width=8, fig.height=9}
+# make table of estimates and names, and add reference groups
+# some results put in order of high to low
+table_names = read.table(sep='!', header=TRUE, stringsAsFactors = FALSE, text='
+xaxis!group!term!label!reference
+1!continuous!date!Trend per 5 years!FALSE
+2!continuous!n_primary!Double the number of primary outcomes!FALSE
+3!continuous!n_secondary!Double the number of secondary outcomes!FALSE
+4!continuous!n_condition!Double the Number of conditions!FALSE
+5!continuous!n_arms!Double the number of arms!FALSE
+6!Gender!genderMale!Males!FALSE
+7!Gender!genderFemale!Females!FALSE
+8!Gender!genderAll!All!TRUE
+9!Age limit!age_limitOver 18!Over 18!FALSE
+10!Age limit!age_limitExactly 18!Exactly 18!FALSE
+11!Age limit!age_limitUnder 18!Under 18!FALSE
+12!Age limit!age_limitNo limit!No limit!TRUE
+13!Type!study_typeInterventional!Interventional!TRUE
+14!Type!study_typeObservational!Observational!FALSE
+15!Phase!phaseEarly Phase 1!Early Phase 1!FALSE
+16!Phase!phasePhase 1!Phase 1!FALSE
+17!Phase!phasePhase 1, Phase 2!Phase 1/2!FALSE
+18!Phase!phasePhase 2!Phase 2!FALSE
+19!Phase!phasePhase 2, Phase 3!Phase 2/3!FALSE
+20!Phase!phasePhase 3!Phase 3!TRUE
+21!Phase!phasePhase 4!Phase 4!FALSE
+22!Phase!phaseNot Applicable!Not Applicable!FALSE
+23!Sponsor!lead_sponsor_classOTHER!Other!TRUE
+24!Sponsor!lead_sponsor_classFED!FED!FALSE
+25!Sponsor!lead_sponsor_classINDUSTRY!Industry!FALSE
+26!Sponsor!lead_sponsor_classNETWORK!Network!FALSE
+27!Sponsor!lead_sponsor_classNIH!NIH!FALSE
+28!Purpose!purposeDevice Feasibility!Device Feasibility!FALSE
+29!Purpose!purposeBasic Science!Basic Science!FALSE
+30!Purpose!purposeTreatment!Treatment!TRUE
+31!Purpose!purposeOther!Other!FALSE
+32!Purpose!purposeDiagnostic!Diagnostic!FALSE
+33!Purpose!purposePrevention!Prevention!FALSE
+34!Purpose!purposeHealth Services Research!Health Services Research!FALSE
+35!Purpose!purposeScreening!Screening!FALSE
+36!Masking!maskingTriple!Triple!FALSE
+37!Masking!maskingTriple!Double!TRUE
+38!Masking!maskingNone (Open Label)!Open label!FALSE
+39!Assignment!assignmentCrossover!Crossover!FALSE
+40!Assignment!assignmentSingle Group!Single group!FALSE
+41!Assignment!assignmentSequential!Sequential!FALSE
+42!Assignment!assignmentParallel!Parallel!TRUE
+43!Assignment!assignmentFactorial!Factorial!FALSE
+44!Allocation!allocationNon-Randomized!Non-Randomized!FALSE
+45!Allocation!allocationNon-Randomized!Randomized!TRUE
+') %>%
+  arrange(xaxis) # sort in order for labels
+# make reference groups
+reference_groups = filter(table_names, reference==TRUE)  %>%
+ mutate(estimate=0)
+
+# add above to estimates
+add_ests = filter(table_names, reference==FALSE) %>%
+  left_join(standard_model_ests, by='term') %>%
+  bind_rows(reference_groups) %>% # add references
+  mutate(
+    # back transform to relative change:
+    estimate = exp(estimate), 
+    conf.low = exp(conf.low),
+    conf.high = exp(conf.high)
+  ) %>%
+  dplyr::select(xaxis, estimate, conf.low, conf.high, reference) %>%
+  mutate(reference = as.numeric(reference=='TRUE') + 1) # to mark reference point
+axis_labels = table_names$label
+
+# quick check that all estimates are in the reference table (should only be intercept); and vice versa
+check_merge = anti_join(standard_model_ests, table_names, by='term')
+check_merge_reverse = anti_join(table_names, standard_model_ests, by='term') %>%
+  filter(reference == FALSE)
+
+# labels for groups
+group_labels = group_by(table_names, group) %>%
+  summarise(n=n(), meanx=mean(xaxis), maxx=max(xaxis)) %>%
+  ungroup() %>%
+  filter(n > 1) %>%
+  mutate(
+    estimate = max(add_ests$conf.high, na.rm=T), conf.low=0, conf.high=0, reference=1,
+    group = ifelse(group=='continuous', 'Continuous\noutcomes', group)) 
+dotted.lines = group_labels$maxx + 0.5 # dotted lines to split groups
+# text for axis labels
+text1 = data.frame(xaxis=0, estimate=1, conf.low=0, conf.high=0, reference=1, label='Increase')
+text2 = data.frame(xaxis=0, estimate=1, conf.low=0, conf.high=0, reference=1, label='Decrease')
+# plot
+star.wars.relative = ggplot(data=add_ests, aes(x=xaxis, y=estimate, ymin=conf.low, ymax=conf.high, shape=factor(reference)))+
+  geom_point(size=2)+
+  scale_shape_manual(NULL, values=c(19,17))+ # triangle and circle
+  geom_errorbar(width=0, size=1.02)+
+  geom_hline(lty=2, yintercept=1)+
+  geom_vline(lty=3, xintercept=c(5.5, dotted.lines))+ # breaks between categorical variables
+  geom_text(data=text1, aes(x=xaxis, y=estimate, label =label), adj=-0.05, col=grey(0.5), size=3.5)+
+  geom_text(data=text2, aes(x=xaxis, y=estimate, label =label), adj=1.05, col=grey(0.5), size=3.5)+
+  geom_text(data=group_labels, aes(x=meanx, y=estimate, label =group), adj=1, col=grey(0.5))+
+  scale_x_continuous(expand=c(0.01,0.01), breaks=1:length(axis_labels), labels=axis_labels, limits=c(0, length(axis_labels)))+
+  scale_y_continuous(breaks=seq(0,4,1), minor_breaks = seq(0,4,0.5), limits=c(0.21, NA))+ # avoid showing 0 on RR axis
+  ylab('Relative change in sample size')+
+  xlab('')+
+  theme_bw()+
+  theme(legend.position = 'none',
+        text=element_text(size=13), 
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank())+
+  coord_flip() # to 
+star.wars.relative
+# export to tall-thin plot
+jpeg('figures/clintrials_sample_size_relative.jpg', width=6, height=7.5, units='in', res=300)
+print(star.wars.relative)
+invisible(dev.off())
+```
+
+
+## Common characteristics
+
+Below we show the top ten characteristics of studies in terms of study type, purpose and masking.
+
+```{r, fig.width=8, fig.height=6}
+# get combinations 
+combs <-  dplyr::select(studies, purpose, masking, study_type, id)  %>%
+  as_tibble() %>%
+  tidyr::gather(key='characteristic', value='response', -id) %>%
+  filter(!is.na(response),
+         response != 'Not Applicable') %>%
+  dplyr::select(-characteristic)
+# now make list from group responses
+list_resp = group_by(combs, id) %>%
+  summarise(responses = list(response))
+# plot
+cplot = ggplot(list_resp, aes(x = responses)) +
+    geom_bar(aes(y=..count../sum(..count..)), fill = "indianred3") +
+    theme_bw() +
+    xlab("Study characteristics") +
+    ylab("Proportion of studies") +
+    scale_x_upset(n_intersections = 10)+
+    g.theme+
+  theme(text=element_text(size=14),
+        plot.margin = margin(t = 0, r = 0, b = 0, l = 60, unit = "pt")) # extend margin for labels
+cplot
+```
+
+
+## Clustering similar studies
+
+We use a k-modes clustering algorithm to look for studies with similar characteristics.
+We assumed there are 10 clusters.
+
+```{r cluster}
+set.seed(780734)
+for.cluster = select(studies, lead_sponsor_class, study_type, purpose, allocation, phase, assignment, masking, gender, age_max_type, age_min_type ) %>% 
+  mutate_all(tidyr::replace_na, replace = 'Missing')  # replace all missing
+cl = kmodes(for.cluster, 10)
+# check which variables do not differ and remove them
+diffs = sapply(sapply(cl$modes, unique), length)
+removed = names(cl$modes)[diffs == 1]
+to_table = cl$modes[, diffs > 1 ] %>%
+  mutate(count=cl$size) %>%
+  arrange(-count) %>%
+  mutate(count = format(count, big.mark = ','))
+pander(to_table, style='simple')
+```
