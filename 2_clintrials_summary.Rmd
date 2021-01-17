@@ -22,7 +22,7 @@ library(visdat) # for missing data
 library(ggplot2)
 library(gridExtra)
 library(ggupset) # to plot combination of study characteristics
-library(pander)
+library(flextable)
 library(summarytools)
 # global options for summary tools
 st_options(plain.ascii = FALSE,       # Always use this option in Rmd documents
@@ -62,7 +62,7 @@ vis_dat(for.missing)
 ## Registration dates
 
 ```{r, results='asis'}
-dates = select(studies, posted, updated, completed, results) %>%
+dates = dplyr::select(studies, posted, updated, completed, results) %>%
   tidyr::gather(key='date', value='res') %>%
   group_by(date) %>%
   filter(!is.na(res)) %>% # remove missing
@@ -72,9 +72,15 @@ dates = select(studies, posted, updated, completed, results) %>%
             q3 = as.Date(quantile(unclass(res), 0.75), origin = "1970-01-01")) %>%
   mutate(date = factor(date, levels=c('posted','updated','completed','results')),
          n = format(n,big.mark = ','),
-         median = as.Date(median, origin='1970-01-01')) %>% # For row ordering
+         median = as.Date(median, origin='1970-01-01'), # For row ordering
+         median = format(median, '%b %Y'), # just month and year
+         q1 = format(q1, '%b %Y'),
+         q3 = format(q3, '%b %Y')) %>% 
   arrange(date)
-pander(dates, style='simple')
+ftab = flextable(dates) %>%
+  theme_box() %>%
+  autofit()
+ftab
 ```
 
 The summary statistics are the median and inter-quartile range.
@@ -97,7 +103,7 @@ with(studies, freq(age_min_type, cumul = FALSE, report.nas =TRUE, order='freq'))
 
 #### Minimum age limit in years
 
-```{r}
+```{r, fig.width=7}
 # split by age
 to.plot = filter(studies, !is.na(age_min)) 
 # round to years for over 1
@@ -125,12 +131,15 @@ hplot2 = ggplot(over_1, aes(x=age_min, y=n))+
   xlab('Minimum age (years)')+
   ylab('Count')+
   g.theme+
+  theme(plot.margin = margin(t = 0, r = 10, b = 0, l = 0, unit = "pt"))+ # extend right margin
   ggtitle('Age 1 and over')
 # combine plot
 grid.arrange(hplot1, hplot2, ncol=2)
 ```
 
-This plot is just for studies that had a minimum age limit.
+This plot is just for the `r format(nrow(to.plot), big.mark=',')` studies that had a minimum age limit.
+By far the most common minimum age is 18.
+The oldest exclusion for minimum age was `r max(to.plot$age_min)` years.
 
 #### Maximum age
 
@@ -140,7 +149,7 @@ with(studies, freq(age_max_type, cumul = FALSE, report.nas =TRUE, order='freq'))
 
 #### Maximum age limit in years
 
-```{r}
+```{r, fig.width=7}
 # split by age
 to.plot = filter(studies, !is.na(age_max)) 
 # round to years for over 1
@@ -173,7 +182,8 @@ hplot2 = ggplot(over_1, aes(x=age_max, y=n))+
 grid.arrange(hplot1, hplot2, ncol=2)
 ```
 
-This plot is just for studies that had a maximum age limit.
+This plot is just for the `r format(nrow(to.plot), big.mark=',')` studies that had a maximum age limit.
+The oldest exclusion for maximum age was `r max(to.plot$age_max)` years.
 
 # Study characteristics
 
@@ -218,13 +228,11 @@ descr(to.summary, stats=c('fivenum'))
 Number of primary and secondary outcomes.
 A small number of studies had a huge number of outcomes.
 
-
 # Study status
 
 ```{r, results='asis'}
 with(studies, freq(status, cumul = FALSE, report.nas =FALSE, order='freq')) 
 ```
-
 
 # Length of description
 
@@ -296,8 +304,8 @@ top_five = group_by(digits, sample_size_type) %>% # per type (facet)
 hplot = ggplot(digits, aes(x=sample_size, y=n))+
   geom_bar(stat="identity", col='chocolate2')+
   xlab('Sample size')+
-  ylab('Count')+
-  geom_label(data=top_ten, aes(x=sample_size, y=n, label=sample_size))+
+  ylab('Number of studies')+
+  geom_label(data=top_five, aes(x=sample_size, y=n, label=sample_size))+
   g.theme+
   facet_wrap(~sample_size_type, scales='free_y')
 hplot
@@ -308,12 +316,13 @@ invisible(dev.off())
 
 The plot above is for the `r format(nrow(exclude_large), big.mark=',')` studies with a target sample size of 200 or fewer.
 
-There is a strong digit preference at multiples of ten. The modal sample size is `r digits$samplesize_target[1]`. The top five sample sizes are shown for each sample size type.
+There is a strong digit preference at multiples of ten. The modal sample size is `r top_five$sample_size[1]`. The top five sample sizes are shown for each sample size type.
 
 
 ## Multiple regression model of sample size
 
 ```{r}
+# load the multiple regression results
 # check if results are already available
 is_results = length(dir('results', pattern = 'clintrials_sample_size')) > 0
 if(is_results == TRUE){
@@ -325,117 +334,108 @@ if(is_results == FALSE){
 ```
 
 ```{r, fig.width=8, fig.height=9}
-# make table of estimates and names, and add reference groups
-# some results put in order of high to low
-table_names = read.table(sep='!', header=TRUE, stringsAsFactors = FALSE, text='
-xaxis!group!term!label!reference
-1!continuous!date!Trend per 5 years!FALSE
-2!continuous!n_primary!Double the number of primary outcomes!FALSE
-3!continuous!n_secondary!Double the number of secondary outcomes!FALSE
-4!continuous!n_condition!Double the Number of conditions!FALSE
-5!continuous!n_arms!Double the number of arms!FALSE
-6!Gender!genderMale!Males!FALSE
-7!Gender!genderFemale!Females!FALSE
-8!Gender!genderAll!All!TRUE
-9!Age limit!age_limitOver 18!Over 18!FALSE
-10!Age limit!age_limitExactly 18!Exactly 18!FALSE
-11!Age limit!age_limitUnder 18!Under 18!FALSE
-12!Age limit!age_limitNo limit!No limit!TRUE
-13!Type!study_typeInterventional!Interventional!TRUE
-14!Type!study_typeObservational!Observational!FALSE
-15!Phase!phaseEarly Phase 1!Early Phase 1!FALSE
-16!Phase!phasePhase 1!Phase 1!FALSE
-17!Phase!phasePhase 1, Phase 2!Phase 1/2!FALSE
-18!Phase!phasePhase 2!Phase 2!FALSE
-19!Phase!phasePhase 2, Phase 3!Phase 2/3!FALSE
-20!Phase!phasePhase 3!Phase 3!TRUE
-21!Phase!phasePhase 4!Phase 4!FALSE
-22!Phase!phaseNot Applicable!Not Applicable!FALSE
-23!Sponsor!lead_sponsor_classOTHER!Other!TRUE
-24!Sponsor!lead_sponsor_classFED!FED!FALSE
-25!Sponsor!lead_sponsor_classINDUSTRY!Industry!FALSE
-26!Sponsor!lead_sponsor_classNETWORK!Network!FALSE
-27!Sponsor!lead_sponsor_classNIH!NIH!FALSE
-28!Purpose!purposeDevice Feasibility!Device Feasibility!FALSE
-29!Purpose!purposeBasic Science!Basic Science!FALSE
-30!Purpose!purposeTreatment!Treatment!TRUE
-31!Purpose!purposeOther!Other!FALSE
-32!Purpose!purposeDiagnostic!Diagnostic!FALSE
-33!Purpose!purposePrevention!Prevention!FALSE
-34!Purpose!purposeHealth Services Research!Health Services Research!FALSE
-35!Purpose!purposeScreening!Screening!FALSE
-36!Masking!maskingTriple!Triple!FALSE
-37!Masking!maskingTriple!Double!TRUE
-38!Masking!maskingNone (Open Label)!Open label!FALSE
-39!Assignment!assignmentCrossover!Crossover!FALSE
-40!Assignment!assignmentSingle Group!Single group!FALSE
-41!Assignment!assignmentSequential!Sequential!FALSE
-42!Assignment!assignmentParallel!Parallel!TRUE
-43!Assignment!assignmentFactorial!Factorial!FALSE
-44!Allocation!allocationNon-Randomized!Non-Randomized!FALSE
-45!Allocation!allocationNon-Randomized!Randomized!TRUE
-') %>%
-  arrange(xaxis) # sort in order for labels
-# make reference groups
-reference_groups = filter(table_names, reference==TRUE)  %>%
- mutate(estimate=0)
+# get the labels
+load('data/labels.RData') # from 0_labels.R
 
-# add above to estimates
-add_ests = filter(table_names, reference==FALSE) %>%
-  left_join(standard_model_ests, by='term') %>%
-  bind_rows(reference_groups) %>% # add references
-  mutate(
+# add estimates to labels
+add_ests = full_join(table_names_clintrials, all_ests, by='term') %>%
+  filter(!term == '(Intercept)',
+         !is.na(estimate)|reference==TRUE)  %>% # remove missing estimates, but keep reference categories
+  dplyr::select(-p.value, -std.error, -statistic) %>% # tidy up
+  mutate(estimate = ifelse(reference==TRUE, 0, estimate), # for reference groups
+         study_type = ifelse(reference==TRUE, 'Reference group', study_type)) # 
+
+# quick check that all estimates are in the reference table (should only be intercept); and vice versa
+check = function(){
+    f = filter(add_ests, is.na(label)) %>% dplyr::select(term) # should be empty
+}
+
+# order results within group and make x-axis number
+est_rank = group_by(add_ests, group_number, term) %>%
+  summarise(mean = mean(estimate)) %>%
+  mutate(rank = rank(mean)) %>%
+  ungroup() %>%
+  dplyr::select(-mean)
+add_x = left_join(add_ests, est_rank, by=c('group_number', 'term')) %>%
+  mutate(final_number = (group_number*100) + rank, # *100 to split numbers
+         xaxis = as.numeric(as.factor(final_number)))
+# final
+all_res = mutate(add_x,
+    reference = as.numeric(reference) + 1, # to mark reference point
     # back transform to relative change:
     estimate = exp(estimate), 
     conf.low = exp(conf.low),
     conf.high = exp(conf.high)
-  ) %>%
-  dplyr::select(xaxis, estimate, conf.low, conf.high, reference) %>%
-  mutate(reference = as.numeric(reference=='TRUE') + 1) # to mark reference point
-axis_labels = table_names$label
+  ) 
 
-# quick check that all estimates are in the reference table (should only be intercept); and vice versa
-check_merge = anti_join(standard_model_ests, table_names, by='term')
-check_merge_reverse = anti_join(table_names, standard_model_ests, by='term') %>%
-  filter(reference == FALSE)
+# get labels
+axis_labels = dplyr::select(all_res, xaxis, label) %>%
+  arrange(xaxis) %>%
+  unique() %>%
+  pull(label)
 
 # labels for groups
-group_labels = group_by(table_names, group) %>%
+group_labels = group_by(all_res, group) %>%
   summarise(n=n(), meanx=mean(xaxis), maxx=max(xaxis)) %>%
   ungroup() %>%
   filter(n > 1) %>%
   mutate(
-    estimate = max(add_ests$conf.high, na.rm=T), conf.low=0, conf.high=0, reference=1,
+    estimate = max(all_res$conf.high, na.rm=T), # put labels at highest CI
+    conf.low=0, conf.high=0, reference=1,
     group = ifelse(group=='continuous', 'Continuous\noutcomes', group)) 
 dotted.lines = group_labels$maxx + 0.5 # dotted lines to split groups
+# dodge observational to avoid overlap of CIs with interventional
+all_res = mutate(all_res,
+                 xaxis = ifelse(study_type=='Observational', xaxis+0.2, xaxis))
 # text for axis labels
 text1 = data.frame(xaxis=0, estimate=1, conf.low=0, conf.high=0, reference=1, label='Increase')
 text2 = data.frame(xaxis=0, estimate=1, conf.low=0, conf.high=0, reference=1, label='Decrease')
 # plot
-star.wars.relative = ggplot(data=add_ests, aes(x=xaxis, y=estimate, ymin=conf.low, ymax=conf.high, shape=factor(reference)))+
-  geom_point(size=2)+
-  scale_shape_manual(NULL, values=c(19,17))+ # triangle and circle
+star.wars.relative = ggplot(data=all_res, aes(x=xaxis, y=estimate, ymin=conf.low, ymax=conf.high, col=factor(study_type)))+
+  geom_hline(lty=2, yintercept=1)+ # reference line
+  geom_point(size=2, shape=19)+
   geom_errorbar(width=0, size=1.02)+
-  geom_hline(lty=2, yintercept=1)+
-  geom_vline(lty=3, xintercept=c(5.5, dotted.lines))+ # breaks between categorical variables
-  geom_text(data=text1, aes(x=xaxis, y=estimate, label =label), adj=-0.05, col=grey(0.5), size=3.5)+
-  geom_text(data=text2, aes(x=xaxis, y=estimate, label =label), adj=1.05, col=grey(0.5), size=3.5)+
+  scale_color_manual(NULL, values=c('goldenrod1','dodgerblue','grey'))+
+  geom_vline(lty=3, xintercept=dotted.lines)+ # breaks between groups of variables
+  geom_text(data=text1, aes(x=xaxis, y=estimate, label =label), adj=-0.1, col=grey(0.5))+
+  geom_text(data=text2, aes(x=xaxis, y=estimate, label =label), adj=1.1, col=grey(0.5))+
   geom_text(data=group_labels, aes(x=meanx, y=estimate, label =group), adj=1, col=grey(0.5))+
-  scale_x_continuous(expand=c(0.01,0.01), breaks=1:length(axis_labels), labels=axis_labels, limits=c(0, length(axis_labels)))+
-  scale_y_continuous(breaks=seq(0,4,1), minor_breaks = seq(0,4,0.5), limits=c(0.21, NA))+ # avoid showing 0 on RR axis
+  scale_x_continuous(expand=c(0.01,0.01), breaks=1:length(axis_labels), labels=axis_labels, limits=c(0, length(axis_labels)+0.2))+ # +0.2 for dodge
+  scale_y_continuous(breaks=seq(0,4,1), minor_breaks = seq(0,4,0.5), limits=c(0.25, NA))+ # avoid showing 0 on RR axis
   ylab('Relative change in sample size')+
   xlab('')+
   theme_bw()+
-  theme(legend.position = 'none',
+  theme(legend.position = 'top',
         text=element_text(size=13), 
         panel.grid.major.y = element_blank(),
         panel.grid.minor.y = element_blank())+
-  coord_flip() # to 
+  coord_flip() 
 star.wars.relative
 # export to tall-thin plot
-jpeg('figures/clintrials_sample_size_relative.jpg', width=6, height=7.5, units='in', res=300)
+jpeg('figures/clintrials_sample_size_relative.jpg', width=7, height=9.5, units='in', res=500)
 print(star.wars.relative)
 invisible(dev.off())
+```
+
+### Check residuals from regression model
+
+```{r, fig.width=7, fig.height=3.5}
+rsq = all_res = NULL
+for (model in c('Interventional','Observational')){ # get residuals for both types
+  res = data.frame(res = resid(standard_models[[model]]))
+  frame = data.frame(model=model, res=res)
+  all_res = bind_rows(all_res, frame)
+# r-squared
+  #r = cor(log2(for.model$samplesize_target), fitted(standard_models[[model]])) ^2
+  #rsq = c(rsq, r)
+}
+rplot = ggplot(all_res, aes(x=res))+
+  geom_histogram(fill='firebrick3')+
+  g.theme+
+  xlab('Residual (log-scale)')+
+  ylab('Count')+
+  facet_wrap(~model, scales='free_y')
+rplot
 ```
 
 
@@ -471,11 +471,11 @@ cplot
 ## Clustering similar studies
 
 We use a k-modes clustering algorithm to look for studies with similar characteristics.
-We assumed there are 10 clusters.
+We tried 10 clusters.
 
 ```{r cluster}
 set.seed(780734)
-for.cluster = select(studies, lead_sponsor_class, study_type, purpose, allocation, phase, assignment, masking, gender, age_max_type, age_min_type ) %>% 
+for.cluster = dplyr::select(studies, lead_sponsor_class, study_type, purpose, allocation, phase, assignment, masking, gender, age_max_type, age_min_type ) %>% 
   mutate_all(tidyr::replace_na, replace = 'Missing')  # replace all missing
 cl = kmodes(for.cluster, 10)
 # check which variables do not differ and remove them
@@ -485,5 +485,8 @@ to_table = cl$modes[, diffs > 1 ] %>%
   mutate(count=cl$size) %>%
   arrange(-count) %>%
   mutate(count = format(count, big.mark = ','))
-pander(to_table, style='simple')
+ftab = flextable(to_table) %>%
+  fontsize(size = 7, part = "all") %>%
+  theme_box()
+ftab
 ```

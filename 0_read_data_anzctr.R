@@ -1,11 +1,11 @@
 # 0_read_data_anzctr.R
-# read the ANZCTR data from XML files
-# May 2020
+# read the ANZCTR data from XML files; takes a while to run
+# December 2020
 library(XML)
 library(stringr)
 library(dplyr)
 source('99_functions.R')
-censor.date = as.Date('2020-06-03') # date that these data were downloaded by me from ANZCTR
+censor.date = as.Date('2020-11-12') # date that these data were downloaded by me from ANZCTR
 
 # institution data, from here https://www.grid.ac/
 inst = read.csv('data/grid-2019-10-06/grid.csv', stringsAsFactors = FALSE) %>%
@@ -17,28 +17,41 @@ list.of.files = dir('data/anzdata', pattern='.xml')
 N = length(list.of.files) # number of files
 
 # big loop
-studies = no.australian = ethics_data = funding_data = NULL
+studies  = ethics_data = funding_data = excluded = NULL
 for (k in 1:N){ # loop through files
   data <- xmlParse(paste('data/anzdata/', list.of.files[k], sep=''))
   xml_data <- xmlToList(data)
   
   ## trial number and dates
   number = xml_data$actrnumber
+  if(is.null(number) == TRUE) {next} # skip NCT studies as they tend to have large amount of missing data for ANZCTR-specific data
   #stage = xml_data$stage # is the same for every study == 'Registered'
   submitted = ifelse(is.null(xml_data$submitdate), NA, as.Date(xml_data$submitdate, '%d/%m/%Y'))
   approved = ifelse(is.null(xml_data$approvaldate), NA, as.Date(xml_data$approvaldate, '%d/%m/%Y'))
   update = ifelse(is.null(xml_data$dateLastUpdated), NA, as.Date(xml_data$dateLastUpdated, '%d/%m/%Y'))
+  
+  ## exclude small number of studies with missing date or retrospectively registered before database started
+  if(is.na(submitted) == TRUE){
+    eframe = data.frame(number=number, reason='Missing date')
+    excluded = bind_rows(excluded, eframe)
+    next # skip to next study
+  }
+  if(submitted < as.Date('2005-01-01')){
+    eframe = data.frame(number=number, reason='Pre 2005')
+    excluded = bind_rows(excluded, eframe)
+    next # skip to next study
+  }
 
-  ## Exclude if not in Australia or NZ
+  ## Exclude if not in Australia or NZ - decided to keep studies outside Australia
   # any Australian / NZ recruitment
-  any.australian = length( grep('Australia|New Zealand', unlist(xml_data$recruitment$recruitmentcountry)) ) > 0
-  outside.australia = length(grep('New Zealand', unlist(xml_data$recruitment$countryoutsideaustralia$country))) > 0
-  if(any.australian == FALSE & outside.australia == FALSE){
-    no.australian = c(no.australian, number) # record non australian numbers
-    next # skip to next loop because no Australian studies
-  } 
+  #any.australian = length( grep('Australia|New Zealand', unlist(xml_data$recruitment$recruitmentcountry)) ) > 0
+  #outside.australia = length(grep('New Zealand', unlist(xml_data$recruitment$countryoutsideaustralia$country))) > 0
+  #if(any.australian == FALSE & outside.australia == FALSE){
+  #  no.australian = c(no.australian, number) # record non australian numbers
+  #  next # skip to next loop because no Australian studies
+  #} 
 
-  ## extract affiliations
+  ## extract affiliations - but not used in analysis so far
   # get contact addresses
   contacts = unique(str_replace_all(string = unlist(unique(lapply(xml_data$contact, '[[', 3))), pattern='[^a-zA-Z0-9]', replace=' '))
   # just first address, could improve at later date
@@ -55,9 +68,9 @@ for (k in 1:N){ # loop through files
     if(length(contacts)>1){contacts = paste(contacts, collapse='; ')} # avoid duplicate rows
     if(length(id_number)>1){id_number = paste(id_number, collapse='; ')}
   } 
-  # TO DO , could change to approximate match
+  # TO DO: could change to approximate match?
   
-  ## who is included?
+  ## variables on who is included in study
   # gender
   gender = ifelse(is.null(xml_data$eligibility$inclusivegender), NA, xml_data$eligibility$inclusivegender)
   # age, convert age to number
@@ -66,7 +79,7 @@ for (k in 1:N){ # loop through files
     age_min = NA
   }
   if(is.null(xml_data$eligibility$inclusiveminagetype) == FALSE){
-    res_min = convert_age(type = xml_data$eligibility$inclusiveminagetype, number =  xml_data$eligibility$inclusiveminage)
+    res_min = convert_age(type = xml_data$eligibility$inclusiveminagetype, number = xml_data$eligibility$inclusiveminage)
     age_min_type = res_min$type
     age_min = res_min$num
   }
@@ -75,26 +88,27 @@ for (k in 1:N){ # loop through files
     age_max = NA
   }
   if(is.null(xml_data$eligibility$inclusivemaxagetype) == FALSE){
-    res_max = convert_age(type = xml_data$eligibility$inclusivemaxagetype, number =  xml_data$eligibility$inclusivemaxage)
+    res_max = convert_age(type = xml_data$eligibility$inclusivemaxagetype, number = xml_data$eligibility$inclusivemaxage)
     age_max_type = res_max$type
     age_max = res_max$num
   }
 
-  ## funding (may by mutliple)
+  ## funding (may by multiple), does not include sponsors
   n_funding = 0  # start with zero
-  if(any(names(xml_data$sponsorship) == 'fundingsource') == TRUE){ # note spelling error for committee
+  if(any(names(xml_data$sponsorship) == 'fundingsource') == TRUE){ # 
     funding = xml_data$sponsorship
     interim = sapply(funding, function(x) lapply(x, function(x) ifelse(is.null(x),NA,x))) # replace NULL with NA
     funding_frame <- data.frame(t(sapply(interim[names(interim) == 'fundingsource'], unlist)), 
                                row.names = NULL) 
-    funding_frame = filter(funding_frame, !is.na(fundingname)) %>% # remove those with missing review committee name
+    funding_frame = filter(funding_frame, !is.na(fundingname)) %>% # remove those with missing name
       mutate(number = number) %>% # add trial number
       select(-fundingaddress) # do not need these
     n_funding = nrow(funding_frame)
   }
   funding = ifelse(is.null(xml_data$sponsorship$fundingsource$fundingtype), NA, xml_data$sponsorship$fundingsource$fundingtype)
+  if(n_funding==0){funding_frame = NULL}
   
-  ## count the outcomes
+  ## count the number of outcomes
   n_primary = sum(names(xml_data$outcomes)=="primaryOutcome")
   n_secondary = sum(names(xml_data$outcomes)=="secondaryOutcome")
   
@@ -104,7 +118,7 @@ for (k in 1:N){ # loop through files
   ccode2 = ifelse(is.null(xml_data$conditions$conditioncode$conditioncode2) == TRUE, NA, xml_data$conditions$conditioncode$conditioncode2)
 
   ## design
-  studytype = ifelse(is.null(xml_data$trial_design$studytype), NA, xml_data$trial_design$studytype)
+  study_type = ifelse(is.null(xml_data$trial_design$studytype), NA, xml_data$trial_design$studytype)
   purpose = ifelse(is.null(xml_data$trial_design$purpose), NA, xml_data$trial_design$purpose)
   masking = ifelse(is.null(xml_data$trial_design$masking), NA, xml_data$trial_design$masking)
   assignment = ifelse(is.null(xml_data$trial_design$assignment), NA, xml_data$trial_design$assignment)
@@ -123,7 +137,7 @@ for (k in 1:N){ # loop through files
   start_anticipated = as.Date(start_anticipated, format = "%d/%m/%Y")
   end_date = as.Date(end_date, format = "%d/%m/%Y")
   
-  ## study status and any publication
+  ## study status and any publication (not used publication so far)
   study_status = ifelse(is.null(xml_data$recruitment$recruitmentstatus), NA, xml_data$recruitment$recruitmentstatus)
   pub = is.null(xml_data$ethicsAndSummary$publication) == FALSE
   pub = factor(as.numeric(pub), levels=0:1, labels=c('No','Yes'))
@@ -143,12 +157,14 @@ for (k in 1:N){ # loop through files
       select(-ethicaddress, -hrec) # do not need these
     n_ethics_committees = nrow(ethics_frame)
   }
+  if(n_ethics_committees==0){ethics_frame = NULL} # helps with bind_rows
 
   ## store data 
   # separate data frames for ethics and funding because need to collect multiple
   ethics_data = bind_rows(ethics_data, ethics_frame)
   funding_data = bind_rows(funding_data, funding_frame)
-  frame = data.frame(id=id_number, address=contacts, 
+  frame = data.frame(id=id_number, 
+                     address=contacts, 
                      number=number, 
                      submitted =submitted, approved=approved, update=update,
                      condition = condition, ccode1=ccode1, ccode2=ccode2,
@@ -156,13 +172,14 @@ for (k in 1:N){ # loop through files
                      n_primary = n_primary, n_secondary = n_secondary,
                      gender=gender, age_min_type=age_min_type, age_max_type=age_max_type,
                      age_min=age_min, age_max=age_max,
-                     studytype = studytype, purpose = purpose,
+                     study_type = study_type, purpose = purpose,
                      masking = masking, assignment=assignment, endpoint=endpoint,
                      phase=phase, 
                      samplesize_target = samplesize_target, samplesize_actual = samplesize_actual,
                      start_anticipated=start_anticipated, end_date=end_date, 
                      study_status = study_status, pub=pub, 
-                     n_ethics_committees = n_ethics_committees, ethics_review = ethics_review, # ethics quetsions that are not repeated over multiple HRECs
+                     n_ethics_committees = n_ethics_committees, ethics_review = ethics_review, # ethics questions that are not repeated over multiple HRECs
+                     funding = funding[1], # first named funder
                      n_funding = n_funding, 
                      stringsAsFactors = FALSE)
   studies = bind_rows(studies, frame)
@@ -174,11 +191,14 @@ for (k in 1:N){ # loop through files
 # general additions and fixes
 studies = mutate(studies, 
                  ID = 1:n(), # simple ID per row
+                 provisional = str_detect(string=number, pattern='p$'), # provisional has a `p` at the end
+                 provisional = factor(as.numeric(provisional), levels=0:1, labels=c('No','Yes')),
+                 gender = ifelse(gender=='Both males and females', 'All', gender), # to match clintrials style
                  submitted = as.Date(submitted, origin='1970-01-01'),
                  approved = as.Date(approved, origin='1970-01-01'),
                  update = as.Date(update, origin='1970-01-01'),
 #                 year = as.numeric(format(start_anticipated, "%Y")), # no longer needed
-                 time = as.numeric(censor.date - end_date), # calculate time to publication
+                 time = as.numeric(censor.date - end_date), # calculate time to publication (not yet used)
                  samplesize_target = as.numeric(samplesize_target),
                  samplesize_actual = as.numeric(samplesize_actual),
 # error in intervention code (capital "D")
@@ -188,7 +208,8 @@ intervention_code = ifelse(intervention_code=='Early Detection / Screening', 'Ea
                  condition = str_remove_all(string=condition, '[^a-z|0-9| ]'),  # remove all non letter characters, e.g., full stop, carraige return 
                  condition = str_remove_all(string=condition, '^ | $|  '), # remove starting or trailing space, or double space
                  condition = str_replace_all(string=condition, pattern = 'type1 |typei', replacement = 'type 1 '),
-                 condition = str_replace_all(string=condition, pattern = 'type2 |type ii ', replacement = 'type 2 ')
+                 condition = str_replace_all(string=condition, pattern = 'type2 |type ii ', replacement = 'type 2 '),
+        ccode1 = str_remove_all(string=ccode1, ' $') # remove trailing space
                  ) 
 
 ## data edits to remove silly maximum ages (can't be done using dplyr)
@@ -197,7 +218,7 @@ index[is.na(index)] = FALSE
 studies$age_max[index] = NA
 studies$age_max_type[index] = 'No limit'
 
-# check for duplicates
+# check for duplicates, should be none
 table(duplicated(studies$number))
 
 ### funding ###
@@ -215,7 +236,7 @@ funding_data = rename(funding_data,
                       'name' = 'fundingname',
                       'country' = 'fundingcountry')
 funding_data = mutate(funding_data,
-name = str_replace_all(string=name, '  |\\n', ' '), # double spaces and carraige returns
+name = str_replace_all(string=name, '  |\\n', ' '), # double spaces and carriage returns
     str_remove_all(string=name, '^  | $'), # remove space at start or end
     str_remove_all(string=name, '^  | $'), # remove space at start or end (repeat)
     str_remove_all(string=name, '^The '), # remove "The " at the start to help combine results (e.g. uni of sydney)
@@ -243,4 +264,14 @@ ethics_data=  mutate(ethics_data, event = case_when(
       !is.na(approvaldate) & !is.na(submitdate) ~ 1)) 
 
 # save
-save(studies, censor.date, funding_data, ethics_data, no.australian, file='data/AnalysisReady.RData')
+save(studies, excluded, censor.date, funding_data, ethics_data, file='data/AnalysisReady.RData')
+
+# save smaller version for shiny
+studies = filter(studies, study_type=='Interventional') %>% # exclude observational
+          select(ID, control, purpose, phase, endpoint, ccode1,
+                 intervention_code, assignment, 
+                 samplesize_target, samplesize_actual) %>%
+  tidyr::gather(`samplesize_target`, `samplesize_actual`, key='sample_size_type', value='sample_size') %>% # format to match clinicaltrials.gov
+  filter(!is.na(sample_size)) %>% # remove missing 
+  mutate(sample_size_type = ifelse(sample_size_type=='samplesize_actual', 'Actual', 'Target'))
+save(studies, censor.date, file='shiny/anzctr_shiny_ready.RData')

@@ -1,8 +1,22 @@
 # 99_functions.R
 # functions for reading data
-# May 2020
+# December 2020
 
-# function to extract XML results for clinicaltrials.gov
+# function to replace null with NA, used by clintrials reading
+null_na = function(x, collapse=FALSE, date=FALSE){
+  y = ifelse(is.null(x), NA, x)
+  if(collapse==TRUE){# collapse vector into one character
+     y = paste(unique(y), sep='', collapse=', ') 
+  }
+  if(date==TRUE){ # convert to date
+     q = str_detect(string=y, pattern='\\?') # search for question mark, does not seem to be an issue
+     y = ifelse(q==FALSE, as.Date(y, '%B %d, %Y'), 'Question') # flag `?` for now
+     y = as.Date(y, origin='1970-01-01')
+  }
+  return(y)
+}
+
+# function to extract XML results for clinicaltrials.gov, no longer used
 my_extract_xml = function(x, part, name, collapse=FALSE, count=FALSE, char=FALSE){
    path = paste(".//Struct[@Name='", part, "']//Field[@Name='", name, "']", sep='')
    get = xml_text(xml_find_all(x, path))
@@ -47,11 +61,12 @@ convert_age = function(type, number){
 
 # converting exclusion age from text to number (clinicaltrials.gov)
 convert_age_clintrials = function(number){
-   if(is.na(number) == TRUE){ 
+   num = 99
+   if(is.na(number) == TRUE | number =='N/A'){ 
       t = 'No limit'
       num = NA
    }
-   if(is.na(number) == FALSE){ 
+   if(is.na(num)==FALSE){ # not changed above
       t = 'Restricted'
       num = as.numeric(str_remove_all(number, '[^0-9]')) # just the number
       # scale number to years:
@@ -130,4 +145,91 @@ roundz = function(x, digits){
    dformat = paste('%.', digits, 'f', sep='')
    x = sprintf(dformat, round(x, digits))
    return(x)
+}
+
+## create nice plot of sample size regression model estimates
+plot_function = function(indata, which_outcome, table_names){
+   # get target estimates
+   this_ests = filter(indata, outcome == which_outcome) # from 2_elasticnet_model_samplesize_ANZCTR.R
+   # remove status from labels if target
+   if(which_outcome=='target'){table_names = filter(table_names, group != 'Status')}
+   # add estimates to labels
+   add_ests = full_join(table_names, this_ests, by='term') %>%
+      filter(!term == '(Intercept)',
+             !is.na(estimate)|reference==TRUE)  %>% # remove missing estimates, but keep reference categories
+      select(-p.value, -std.error, -statistic) %>% # tidy up
+      mutate(estimate = ifelse(reference==TRUE, 0, estimate), # for reference groups
+             study_type = ifelse(reference==TRUE, 'Reference group', study_type)) # just to avoid missing
+   
+   # quick check that all estimates are in the reference table (should only be intercept); and vice versa
+   check = function(){
+      f = filter(add_ests, is.na(label)) %>% dplyr::select(term) # should be empty
+   }
+   
+   # order results within group and make x-axis number
+   est_rank = group_by(add_ests, group_number, term) %>%
+      summarise(mean = mean(estimate)) %>%
+      mutate(rank = rank(mean)) %>%
+      ungroup() %>%
+      select(-mean)
+   add_x = left_join(add_ests, est_rank, by=c('group_number', 'term')) %>%
+      mutate(final_number = (group_number*100) + rank, # *100 to split numbers
+             xaxis = as.numeric(as.factor(final_number)))
+   # final
+   all_res = mutate(add_x,
+                    reference = as.numeric(reference) + 1, # to mark reference point
+                    # back transform to relative change:
+                    estimate = exp(estimate), 
+                    conf.low = exp(conf.low),
+                    conf.high = exp(conf.high)
+   ) 
+   # get labels
+   axis_labels = select(all_res, xaxis, label) %>%
+      arrange(xaxis) %>%
+      unique() %>%
+      pull(label)
+   
+   # labels for groups
+   group_labels = group_by(all_res, group) %>%
+      summarise(n=n(), meanx=mean(xaxis), maxx=max(xaxis)) %>%
+      ungroup() %>%
+      filter(n > 1) %>%
+      mutate(
+         estimate = max(all_res$conf.high, na.rm=T), # put labels at highest CI
+         conf.low=0, conf.high=0, reference=1,
+         group = ifelse(group=='continuous', 'Continuous\noutcomes', group)) 
+   dotted.lines = group_labels$maxx + 0.5 # dotted lines to split groups
+   # dodge observational to avoid overlap of CIs with interventional
+   all_res = mutate(all_res,
+                    xaxis = ifelse(study_type=='Observational', xaxis+0.2, xaxis))
+   # text for axis labels
+   text1 = data.frame(xaxis=0, estimate=1, conf.low=0, conf.high=0, reference=1, label='Increase')
+   text2 = data.frame(xaxis=0, estimate=1, conf.low=0, conf.high=0, reference=1, label='Decrease')
+   # plot
+   star.wars.relative = ggplot(data=all_res, aes(x=xaxis, y=estimate, ymin=conf.low, ymax=conf.high, shape=factor(reference), col=factor(study_type)))+
+      geom_hline(lty=2, yintercept=1)+ # reference line
+      geom_point(size=2, shape=19)+
+      geom_errorbar(width=0, size=1.02)+
+      scale_color_manual(NULL, values=c('goldenrod1','dodgerblue','grey'))+
+      geom_vline(lty=3, xintercept=dotted.lines)+ # breaks between groups of variables
+      geom_text(data=text1, aes(x=xaxis, y=estimate, label =label), adj=-0.1, col=grey(0.5))+
+      geom_text(data=text2, aes(x=xaxis, y=estimate, label =label), adj=1.1, col=grey(0.5))+
+      geom_text(data=group_labels, aes(x=meanx, y=estimate, label =group), adj=1, col=grey(0.5))+
+      scale_x_continuous(expand=c(0.01,0.01), breaks=1:length(axis_labels), labels=axis_labels, limits=c(0, length(axis_labels)+0.2))+ # plus 0.2 for dodge
+      scale_y_continuous(breaks=seq(0,3,1), minor_breaks = seq(0,3,0.5), limits=c(10^-6, NA))+ # avoid showing 0 on RR axis
+      ylab('Relative change in sample size')+
+      xlab('')+
+      theme_bw()+
+      ggtitle(" ")+ # create room for legend
+      theme(#legend.position = 'top',
+         legend.position = c(0, 1), # (x,y) position = 'top' not working
+         legend.justification = c(0.5,-0.2), # further help getting it outside plot area (minus makes y bit higher)
+         legend.direction = 'horizontal',
+         legend.margin = unit(0,"lines"),
+         text=element_text(size=13), 
+         panel.grid.major.y = element_blank(),
+         panel.grid.minor.y = element_blank())+
+      coord_flip() 
+   star.wars.relative
+   return(star.wars.relative)
 }

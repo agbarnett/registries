@@ -1,8 +1,8 @@
 # 0_read_data_clintrials_xml.R
 # read the clinicaltrials.gov data from XML files using the web
-# version reading XMLs from mega zip file
-# May 2020
-library(xml2)
+# version reading XMLs from mega zip file, see https://www.clinicaltrials.gov/ct2/resources/download, from https://clinicaltrials.gov/AllPublicXML.zip 
+# December 2020
+library(XML)
 library(dplyr)
 library(stringr)
 source('99_functions.R')
@@ -11,7 +11,7 @@ home = getwd()
 # folders to download
 folders = dir('U:/Research/Projects/ihbi/aushsi/aushsi_barnetta/meta.research/ANZCTR/data/AllAPIXML')
 folders = folders[folders!='Contents.txt']
-# does data already exist
+# does data already exist?
 existing_data = str_remove(dir('data/raw/', pattern='.RData'), '.RData')
 folders = setdiff(folders, existing_data)
 N = length(folders)
@@ -24,114 +24,144 @@ for (f in 1:N){
   
   cat('folder = ', folders[f], '\n',sep='') # progress
 
- studies = countries = types = excluded = conditions = NULL
+ studies = excluded = NULL
  for (k in 1:length(xml_files)){
   # get the XML data into R
-  x <- tryCatch (read_xml(xml_files[k], options='RECOVER'), error=function(e){}, warning=function(f){}) # supress errors and warnings with dummy functions
-  if(is.null(x)){ # if empty then record and skip to next
-    excluded = c(excluded, xml_files[k]) # 
-    next # skip to next
+  data <- xmlParse(xml_files[k])
+  xml_data <- xmlToList(data) # only gets top level children, so vulnerable to missing information where there are multiple lists
+
+  ## extract individual parts of the XML
+  # basics
+  id = null_na(xml_data$id_info$nct_id)
+  secondary_id = null_na(xml_data$id_info$secondary_id)
+  if(length(secondary_id) > 1){stop("Multple secondary IDs")}
+  status = null_na(xml_data$overall_status)
+  study_type = null_na(xml_data$study_type)
+  # exclude the following
+  exclude = pmax(status=='Withheld' , study_type == 'Expanded Access' , str_detect(string=tolower(secondary_id), 'actrn'), na.rm=TRUE)
+  if(exclude == 1){
+    # reason for exclusion
+    reason = ''
+    reason = ifelse(str_detect(string=tolower(secondary_id), 'actrn')==TRUE, 'ANZCTR', reason )
+    reason = ifelse(status=='Withheld', 'Withheld', reason )
+    reason = ifelse(study_type == 'Expanded Access', 'Expanded Access', reason )
+    #
+    frame = data.frame(id = id, reason=reason, status=status, study_type = study_type, secondary_id=secondary_id)
+    excluded = bind_rows(excluded, frame)
+    next # move on to next study
   }
-  
-  # temporary, search for alias
-  alias = length(grep('alias',tolower(as.character(x))))
-  if(alias > 1){ # put in file
-    out_file = 'U:/Research/Projects/ihbi/aushsi/aushsi_barnetta/meta.research/ANZCTR/alias.txt'
-    report = file(out_file, 'a')
-    cat(xml_files[k], '\n', file=report)
-    close(report)
+  # count the number of countries - not collected consistently
+  #countries = xpathApply(data, "//location_countries")
+  #n_countries = length(countries)
+  # study design
+  phase = null_na(xml_data$phase, collapse=TRUE) # can be multiple so collapse into single result
+  study_design_observational = null_na(xml_data$study_design_info$observational_model)
+  study_design_time = null_na(xml_data$study_design_info$time_perspective)
+  # more study design
+  allocation = null_na(xml_data$study_design_info$allocation)
+  masking = null_na(xml_data$study_design_info$masking)
+  masking = stringi::stri_extract_first(masking, regex="\\w+") # simplify to just first word
+  purpose = null_na(xml_data$study_design_info$primary_purpose)
+  assignment = null_na(xml_data$study_design_info$intervention_model)
+  # intervention type, can be multiple per study
+  interventions = xpathApply(data, "//intervention")
+  type = ''
+  if(length(interventions)>0){
+    for (l in 1:length(interventions)){
+      temporary = xmlToList(interventions[[l]])
+      type = c(type, temporary$intervention_type)
+    }
   }
-  
-  # extract individual parts of the XML
-  id = my_extract_xml(x, part = 'IdentificationModule', name = 'NCTid')
-  if(is.na(id)==TRUE){id = my_extract_xml(x, part = 'IdentificationModule', name = 'NCTId')}
-  status = my_extract_xml(x, part = 'StatusModule', name = 'OverallStatus')
-  description_nchar = my_extract_xml(x, part = 'DescriptionModule', name = 'DetailedDescription', char=TRUE) # count characters
-  study_posted = my_extract_xml(x, part = 'StatusModule', name = 'StudyFirstPostDate')
-  study_update = my_extract_xml(x, part = 'StatusModule', name = 'LastUpdatePostDate') # using update date used on clinicaltrials.gov web site
-  study_results = my_extract_xml(x, part = 'StatusModule', name = 'ResultsFirstPostDate')
-  complete_date = my_extract_xml(x, part = 'CompletionDateStruct', name = 'CompletionDate')
-  complete_type = my_extract_xml(x, part = 'CompletionDateStruct', name = 'CompletionDateType')
-  #lead_sponsor = my_extract_xml(x, part = 'SponsorCollaboratorsModule', name = 'LeadSponsorName') # too varied to be useful
-  lead_sponsor_class = my_extract_xml(x, part = 'SponsorCollaboratorsModule', name = 'LeadSponsorClass')
-  condition = my_extract_xml(x, part = 'ConditionsModule', name = 'Condition') # can be multiple - too varied to be useful
-  n_condition = length(condition)
-  study_type = my_extract_xml(x, part = 'DesignModule', name = 'StudyType') # 
-  phase = my_extract_xml(x, part = 'DesignModule', name = 'Phase', collapse=TRUE) # can be multiple so collapse into single result
-  allocation = my_extract_xml(x, part = 'DesignInfo', name = 'DesignAllocation') 
-  assignment = my_extract_xml(x, part = 'DesignInfo', name = 'DesignInterventionModel') 
-  purpose = my_extract_xml(x, part = 'DesignInfo', name = 'DesignPrimaryPurpose') 
-  masking = my_extract_xml(x, part = 'DesignInfo', name = 'DesignMasking') 
-  type = unique(my_extract_xml(x, part = 'ArmsInterventionsModule', name = 'InterventionType')) # can be multiple, just unique
-  sample_size = my_extract_xml(x, part = 'EnrollmentInfo', name = 'EnrollmentCount') 
-  sample_size_type = my_extract_xml(x, part = 'EnrollmentInfo', name = 'EnrollmentType') 
-  gender = my_extract_xml(x, part = 'EligibilityModule', name = 'Gender') 
-  min_age = my_extract_xml(x, part = 'EligibilityModule', name = 'MinimumAge') 
-  max_age = my_extract_xml(x, part = 'EligibilityModule', name = 'MaximumAge') 
-  n_arms = my_extract_xml(x, part = 'ArmsInterventionsModule', name = 'ArmGroupLabel', count=TRUE) # can be multiple; just use count
-  n_primary = my_extract_xml(x, part = 'OutcomesModule', name = 'PrimaryOutcomeMeasure', count=TRUE) # can be multiple; just use count
-  n_secondary = my_extract_xml(x, part = 'OutcomesModule', name = 'SecondaryOutcomeMeasure', count=TRUE) # can be multiple; just use count
-  country = unique(my_extract_xml(x, part = 'ContactsLocationsModule', name = 'LocationCountry')) # can be multiple, just take unique countries
-  
-  # get NIH funding number, abandoned - too hard
-#  frame_funding = NULL
-#  funding_type = my_extract_xml(x, part = 'ProtocolSection', name = 'SecondaryIdType') # can be multiple
-#  if(any(is.na(funding_type)) == FALSE){
-#    if(any(str_detect(funding_type, pattern='NIH'))){
-#      funding_number = my_extract_xml(x, part = 'ProtocolSection', name = 'SecondaryId') # can be multiple
-#      frame_funding = data.frame(id=id, type=funding_type, number=funding_number) %>%
-#        filter(str_detect(string=type, pattern='NIH')) # just NIH funding for matching with NIH reporter
-#    }
-#  }
-  
-  # conditions frame
-  frame_condition = data.frame(id=id, condition=condition)
-  # country frame
-  frame_country = data.frame(id=id, countries=country)
-  # type frame
-  frame_type = data.frame(id=id, conditions=type)
+  behavioral = any(str_detect(string=type, pattern='Behavioral'))
+  biological = any(str_detect(string=type, pattern='Biological'))
+  combination = any(str_detect(string=type, pattern='Combination Product'))
+  device = any(str_detect(string=type, pattern='Device'))
+  diagnostic = any(str_detect(string=type, pattern='Diagnostic Test'))
+  dietary = any(str_detect(string=type, pattern='Dietary Supplement'))
+  drug = any(str_detect(string=type, pattern='Drug'))
+  genetic = any(str_detect(string=type, pattern='Genetic'))
+  procedure = any(str_detect(string=type, pattern='Procedure'))
+  radiation = any(str_detect(string=type, pattern='Radiation'))
+  other = any(str_detect(string=type, pattern='Other'))
+  # eligibility
+  gender = null_na(xml_data$eligibility$gender)
+  min_age = null_na(xml_data$eligibility$minimum_age)
+  max_age = null_na(xml_data$eligibility$maximum_age)
+  volunteers = null_na(xml_data$eligibility$healthy_volunteers)
+  # dates
+  posted = null_na(xml_data$study_first_posted$text, date=TRUE)
+  updated = null_na(xml_data$last_update_submitted, date=TRUE)
+  #
+  lead_sponsor_class = null_na(xml_data$sponsors$lead_sponsor$agency_class)
+  #condition = null_na(xml_data$condition) # too varied to be useful ...
+  n_condition = str_count(string=as(data,'character'), pattern='\\<condition\\>') # ... just take number
+  # sample size
+  if(class(xml_data$enrollment)=='character'){ # version without detail
+    sample_size = as.numeric(null_na(xml_data$enrollment))
+    sample_size_type = 'Not stated'
+  }
+  if(class(xml_data$enrollment)!='character'){
+    sample_size = as.numeric(null_na(xml_data$enrollment$text))
+    sample_size_type = null_na(xml_data$enrollment$.attrs)
+  }
+  #
+  n_primary = str_count(string=as(data,'character'), pattern='\\<primary_outcome\\>')
+  n_secondary = str_count(string=as(data,'character'), pattern='\\<secondary_outcome\\>') # not yet tested
+  n_arms = null_na(xml_data$number_of_groups) # wording depending on study type
+  if(is.na(n_arms)==TRUE){n_arms = null_na(xml_data$number_of_arms)}
+
   # frame with one result per trial
   frame = data.frame(id = id, 
                      status = status,
-                     description_nchar = description_nchar,
-                     posted = study_posted, 
-                     updated = study_update,
-                     results = study_results,
-                     completed = complete_date,
-                     completed_type = complete_type,
+                     posted = posted, 
+                     updated = updated, 
                      lead_sponsor_class = lead_sponsor_class,
                      study_type = study_type, 
+                     biological = biological,
+                     behavioral = behavioral,
+                     combination = combination,
+                     device = device,
+                     diagnostic = diagnostic,
+                     dietary = dietary,
+                     drug = drug,
+                     genetic = genetic,
+                     procedure = procedure,
+                     radiation = radiation,
+                     other = other,
                      n_condition = n_condition,
+                     n_arms = n_arms,
                      purpose = purpose, 
                      masking = masking, 
-                     allocation=allocation, 
-                     assignment=assignment, 
-                     phase = phase, 
-                     n_arms = n_arms,
+                     allocation = allocation, 
+                     assignment = assignment, 
+                     phase = phase,
+                     study_design_observational = study_design_observational,
+                     study_design_time = study_design_time,
                      sample_size = sample_size, 
                      sample_size_type = sample_size_type,
-                     gender=gender, 
-                     min_age=min_age, 
-                     max_age=max_age,
+                     gender = gender, 
+                     min_age = min_age, 
+                     max_age = max_age,
+                     volunteers = volunteers,
                      n_primary = n_primary, 
                      n_secondary = n_secondary,
                      stringsAsFactors = FALSE)
+  if(nrow(frame) > 1){stop('Multiple results per study')}
   # concatenate
   studies = bind_rows(studies, frame)
-  countries = bind_rows(countries, frame_country)
-  conditions = bind_rows(conditions, frame_condition)
-  types = bind_rows(types, frame_type)
   # tidy up
-  remove(x, frame, frame_country, frame_type, frame_condition)
+  remove(data, xml_data, frame)
   # progress
   if(k%%100==0)(cat('Up to ',k,'.\r',sep=''))
 }
 
-# remove xml file to save space?
-#file.remove('temp.xml')
-
+ # check of numbers
+ if(is.null(excluded)==FALSE){diff = nrow(studies) + nrow(excluded) - length(xml_files)}
+ if(is.null(excluded)==TRUE){diff = nrow(studies) - length(xml_files)}
+ if(diff !=0) {cat('Numbers do not add up for', f, '.\n', sep='')}
+ 
 # save 
 setwd(home)
 outfile = paste('U:/Research/Projects/ihbi/aushsi/aushsi_barnetta/meta.research/ANZCTR/data/raw/', folders[f], '.RData', sep='')
-save(studies, countries, types, conditions, excluded, file=outfile)
+save(studies, excluded, file=outfile)
 } # end of folders loop
