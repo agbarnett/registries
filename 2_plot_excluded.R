@@ -1,5 +1,5 @@
 # 2_plot_excluded.R
-# CONSORT style diagram of excluded studies
+# CONSORT style diagram of included/excluded studies
 # January 2021
 library(dplyr)
 library(ggplot2)
@@ -9,6 +9,9 @@ library(diagram)
 load('data/AnalysisReady.RData')# from 0_read_data_anzctr.R
 anzctr_excluded = excluded
 n_anzctr = nrow(studies)
+ratio = mutate(studies, ratio = samplesize_actual / samplesize_target) %>%
+  filter(!is.na(ratio)) # remove missing
+n_anzctr_ratio = nrow(ratio)
 load('data/clinicaltrials_analysis_ready.RData') # from 1_process_clintrials_data.R
 clintrials_excluded = excluded
 n_clintrials = nrow(studies)
@@ -30,40 +33,42 @@ par(mai=c(0,0,0,0))
 labels = c(paste('Downloaded\n n = ', format(n_start_anzctr, big.mark = ','), sep=''),
            paste('Excluded\n- ', count_anzctr$reason[1], ', n = ', count_anzctr$n[1],
                  '\n- ', count_anzctr$reason[2], ', n = ', count_anzctr$n[2], sep=''),
-           paste('Analysed\n n =', format(n_anzctr, big.mark = ',')))
+           paste('Analysed\n n =', format(n_anzctr, big.mark = ','),'\n- Ratio analysis=', format(n_anzctr_ratio,big.mark=',')))
 n_labels = length(labels)
 M = matrix(nrow=n_labels, ncol=n_labels)
 M[3,1] = "' '" 
-pos = matrix(data=c(0.2,0.8,
+pos = matrix(data=c(0.29,0.8,
                     0.7,0.5,
-                    0.2,0.2), ncol=2, byrow=TRUE)
-sizes=c(1.5,2.3,1.5) / 10
-props = c(0.67,0.5,0.67) # narrower for first and last
+                    0.29,0.2), ncol=2, byrow=TRUE)
+sizes=c(1.5,2.3,2.6) / 10
+props = c(0.67,0.5,0.4) # narrower for first and last
 plotmat(M, name=labels, pos=pos, box.type = 'rect', box.size=sizes, box.prop = props, curve = 0, arr.pos=0.85)
-shape::Arrows(x0=0.2, x1=0.45, y0=0.5, y1=0.5, arr.width=0.2, arr.length=0.22, arr.type='triangle')
+shape::Arrows(x0=0.29, x1=0.45, y0=0.5, y1=0.5, arr.width=0.2, arr.length=0.22, arr.type='triangle')
 # heading
 text(0.5, 0.95, "ANZCTR", font=2)
 }
 make_diagram_anzctr()
 
-## a) function to make diagram clintrials.gov
+## b) function to make diagram clintrials.gov
 make_diagram_clintrials = function(){
   par(mai=c(0,0,0,0))
   labels = c(paste('Downloaded\n n = ', format(n_start_clintrials, big.mark = ','), sep=''),
-             paste('Excluded\n- ', count_clintrials$reason[1], ', n = ', count_clintrials$n[1],
+             paste('Excluded\n- ', count_clintrials$reason[1], ', n = ', format(count_clintrials$n[1], big.mark = ','),
                    '\n- ', count_clintrials$reason[2], ', n = ', count_clintrials$n[2], 
-                   '\n- ', count_clintrials$reason[3], ', n = ', count_clintrials$n[3], sep=''),
+                   '\n- ', count_clintrials$reason[3], ', n = ', count_clintrials$n[3], 
+                   '\n- ', count_clintrials$reason[4], ', n = ', count_clintrials$n[4],
+                   '\n- ', count_clintrials$reason[5], ', n = ', count_clintrials$n[5], sep=''),
              paste('Analysed\n n =', format(n_clintrials, big.mark = ',')))
   n_labels = length(labels)
   M = matrix(nrow=n_labels, ncol=n_labels)
   M[3,1] = "' '" 
-  pos = matrix(data=c(0.2,0.8,
-                      0.62,0.5,
-                      0.2,0.2), ncol=2, byrow=TRUE)
-  sizes=c(1.5,3.1,1.5) / 10
-  props = c(0.67,0.45,0.67) # narrower for first and last
+  pos = matrix(data=c(0.16,0.8,
+                      0.61,0.5,
+                      0.16,0.2), ncol=2, byrow=TRUE)
+  sizes=c(1.5,3.8,1.5) / 10
+  props = c(0.67,0.48,0.67) # narrower for first and last
   plotmat(M, name=labels, pos=pos, box.type = 'rect', box.size=sizes, box.prop = props, curve = 0, arr.pos=0.85)
-  shape::Arrows(x0=0.2, x1=0.29, y0=0.5, y1=0.5, arr.width=0.2, arr.length=0.22, arr.type='triangle')
+  shape::Arrows(x0=0.16, x1=0.21, y0=0.5, y1=0.5, arr.width=0.2, arr.length=0.22, arr.type='triangle')
   # heading
   text(0.5, 0.95, "clintrials.gov", font=2)
 }
@@ -71,7 +76,10 @@ make_diagram_clintrials()
 
 
 # export
-jpeg('figures/consort_plot.jpg', width=7, height=5, units='in', res=300)
+library(extrafont)
+loadfonts(device = "win")
+#jpeg('figures/consort_plot.jpg', width=7, height=5, units='in', res=300)
+tiff('figures/Fig1.tif', width=2000, height=1400, units='px', res=300, family='Times New Roman', compression = 'lzw') # for PLOS
 layout(mat=t(1:2))
 make_diagram_anzctr()
 make_diagram_clintrials()

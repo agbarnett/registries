@@ -148,9 +148,16 @@ roundz = function(x, digits){
 }
 
 ## create nice plot of sample size regression model estimates
-plot_function = function(indata, which_outcome, table_names){
-   # get target estimates
-   this_ests = filter(indata, outcome == which_outcome) # from 2_elasticnet_model_samplesize_ANZCTR.R
+plot_function = function(indata, 
+                         which_outcome, 
+                         table_names, 
+                         label_side = NULL, # side for group labels
+                         ljust=0.5, # justfication of legend at top
+                         x_limits=1:3, # major ticks for x-axis
+                         minor_breaks=0 # minor ticks for x-axis
+                         ){
+   # get estimates
+   this_ests = filter(indata, outcome == which_outcome) # from elastic net models
    # remove status from labels if target
    if(which_outcome=='target'){table_names = filter(table_names, group != 'Status')}
    # add estimates to labels
@@ -160,6 +167,11 @@ plot_function = function(indata, which_outcome, table_names){
       select(-p.value, -std.error, -statistic) %>% # tidy up
       mutate(estimate = ifelse(reference==TRUE, 0, estimate), # for reference groups
              study_type = ifelse(reference==TRUE, 'Reference group', study_type)) # just to avoid missing
+   # only include groups that were in the final model
+   add_ests  =group_by(add_ests, group_number) %>%
+      summarise(any_non_ref = min(reference)) %>%
+      right_join(add_ests, by='group_number') %>%
+      filter(any_non_ref == 0) # only if there's at least one non-reference estimate
    
    # quick check that all estimates are in the reference table (should only be intercept); and vice versa
    check = function(){
@@ -175,13 +187,21 @@ plot_function = function(indata, which_outcome, table_names){
    add_x = left_join(add_ests, est_rank, by=c('group_number', 'term')) %>%
       mutate(final_number = (group_number*100) + rank, # *100 to split numbers
              xaxis = as.numeric(as.factor(final_number)))
+   # reverse order to match table
+   add_x = mutate(add_x, xaxis = max(xaxis) - xaxis + 1)
+   
    # final
    all_res = mutate(add_x,
                     reference = as.numeric(reference) + 1, # to mark reference point
                     # back transform to relative change:
                     estimate = exp(estimate), 
                     conf.low = exp(conf.low),
-                    conf.high = exp(conf.high)
+                    conf.high = exp(conf.high),
+                  # now make into percent change,
+                  estimate = 100*(estimate-1),
+                  conf.low = 100*(conf.low-1),
+                  conf.high = 100*(conf.high-1)
+                     
    ) 
    # get labels
    axis_labels = select(all_res, xaxis, label) %>%
@@ -189,41 +209,41 @@ plot_function = function(indata, which_outcome, table_names){
       unique() %>%
       pull(label)
    
-   # labels for groups
+   # labels for groups inside plot area
    group_labels = group_by(all_res, group) %>%
       summarise(n=n(), meanx=mean(xaxis), maxx=max(xaxis)) %>%
       ungroup() %>%
       filter(n > 1) %>%
       mutate(
-         estimate = max(all_res$conf.high, na.rm=T), # put labels at highest CI
+         estimate = max(all_res$conf.high, na.rm=T), # put labels at highest CI (right side)
          conf.low=0, conf.high=0, reference=1,
-         group = ifelse(group=='continuous', 'Continuous\noutcomes', group)) 
+         group = ifelse(group=='continuous', 'Continuous variables', group)) # 
    dotted.lines = group_labels$maxx + 0.5 # dotted lines to split groups
    # dodge observational to avoid overlap of CIs with interventional
    all_res = mutate(all_res,
                     xaxis = ifelse(study_type=='Observational', xaxis+0.2, xaxis))
    # text for axis labels
-   text1 = data.frame(xaxis=0, estimate=1, conf.low=0, conf.high=0, reference=1, label='Increase')
-   text2 = data.frame(xaxis=0, estimate=1, conf.low=0, conf.high=0, reference=1, label='Decrease')
+   text1 = data.frame(xaxis=1, estimate=1, conf.low=0, conf.high=0, reference=1, label='Increase')
+   text2 = data.frame(xaxis=1, estimate=1, conf.low=0, conf.high=0, reference=1, label='Decrease')
    # plot
    star.wars.relative = ggplot(data=all_res, aes(x=xaxis, y=estimate, ymin=conf.low, ymax=conf.high, shape=factor(reference), col=factor(study_type)))+
-      geom_hline(lty=2, yintercept=1)+ # reference line
+      geom_hline(lty=2, yintercept=0)+ # reference line at zero
       geom_point(size=2, shape=19)+
       geom_errorbar(width=0, size=1.02)+
       scale_color_manual(NULL, values=c('goldenrod1','dodgerblue','grey'))+
       geom_vline(lty=3, xintercept=dotted.lines)+ # breaks between groups of variables
-      geom_text(data=text1, aes(x=xaxis, y=estimate, label =label), adj=-0.1, col=grey(0.5))+
-      geom_text(data=text2, aes(x=xaxis, y=estimate, label =label), adj=1.1, col=grey(0.5))+
+      geom_text(data=text1, aes(x=xaxis, y=estimate, label =label), adj=-0.1, vjust=1, col=grey(0.5))+
+      geom_text(data=text2, aes(x=xaxis, y=estimate, label =label), adj=1.1, vjust=1, col=grey(0.5))+
       geom_text(data=group_labels, aes(x=meanx, y=estimate, label =group), adj=1, col=grey(0.5))+
-      scale_x_continuous(expand=c(0.01,0.01), breaks=1:length(axis_labels), labels=axis_labels, limits=c(0, length(axis_labels)+0.2))+ # plus 0.2 for dodge
-      scale_y_continuous(breaks=seq(0,3,1), minor_breaks = seq(0,3,0.5), limits=c(10^-6, NA))+ # avoid showing 0 on RR axis
-      ylab('Relative change in sample size')+
+      scale_x_continuous(expand=c(0.01,0.01), breaks=1:length(axis_labels), labels=axis_labels, limits=c(0.5, length(axis_labels)+0.2))+ # plus 0.2 for dodge
+      scale_y_continuous(breaks=x_limits, minor_breaks =minor_breaks )+ # 
+      ylab('Percent change in sample size')+
       xlab('')+
       theme_bw()+
       ggtitle(" ")+ # create room for legend
       theme(#legend.position = 'top',
          legend.position = c(0, 1), # (x,y) position = 'top' not working
-         legend.justification = c(0.5,-0.2), # further help getting it outside plot area (minus makes y bit higher)
+         legend.justification = c(ljust, -0.2), # further help getting it outside plot area (minus makes y bit higher)
          legend.direction = 'horizontal',
          legend.margin = unit(0,"lines"),
          text=element_text(size=13), 

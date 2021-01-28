@@ -1,7 +1,7 @@
 # 0_read_data_clintrials_xml.R
 # read the clinicaltrials.gov data from XML files using the web
 # version reading XMLs from mega zip file, see https://www.clinicaltrials.gov/ct2/resources/download, from https://clinicaltrials.gov/AllPublicXML.zip 
-# December 2020
+# January 2021
 library(XML)
 library(dplyr)
 library(stringr)
@@ -89,6 +89,7 @@ for (f in 1:N){
   max_age = null_na(xml_data$eligibility$maximum_age)
   volunteers = null_na(xml_data$eligibility$healthy_volunteers)
   # dates
+  submitted = null_na(xml_data$study_first_submitted, date=TRUE)
   posted = null_na(xml_data$study_first_posted$text, date=TRUE)
   updated = null_na(xml_data$last_update_submitted, date=TRUE)
   #
@@ -113,6 +114,7 @@ for (f in 1:N){
   # frame with one result per trial
   frame = data.frame(id = id, 
                      status = status,
+                     submitted = submitted,
                      posted = posted, 
                      updated = updated, 
                      lead_sponsor_class = lead_sponsor_class,

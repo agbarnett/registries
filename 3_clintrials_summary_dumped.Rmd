@@ -1,0 +1,61 @@
+# Length of description
+
+```{r, results='asis'}
+to.summary = select(studies, description_nchar)
+descr(to.summary, stats=c('N.valid','Min','Q1','Med','Q3','Max'))
+```
+
+This is the number of characters written in the description section.
+
+## Common characteristics
+
+Below we show the top ten characteristics of studies in terms of study type, purpose and masking.
+
+```{r, fig.width=8, fig.height=6}
+# get combinations 
+combs <-  dplyr::select(studies, purpose, masking, study_type, id)  %>%
+  as_tibble() %>%
+  tidyr::gather(key='characteristic', value='response', -id) %>%
+  filter(!is.na(response),
+         response != 'Not Applicable') %>%
+  dplyr::select(-characteristic)
+# now make list from group responses
+list_resp = group_by(combs, id) %>%
+  summarise(responses = list(response))
+# plot
+cplot = ggplot(list_resp, aes(x = responses)) +
+    geom_bar(aes(y=..count../sum(..count..)), fill = "indianred3") +
+    theme_bw() +
+    xlab("Study characteristics") +
+    ylab("Proportion of studies") +
+    scale_x_upset(n_intersections = 10)+
+    g.theme+
+  theme(text=element_text(size=14),
+        plot.margin = margin(t = 0, r = 0, b = 0, l = 60, unit = "pt")) # extend margin for labels
+cplot
+```
+
+
+## Clustering similar studies
+
+We use a k-modes clustering algorithm to look for studies with similar characteristics.
+We tried 10 clusters.
+
+```{r cluster}
+library(klaR) # for k-modes clustering
+set.seed(780734)
+for.cluster = dplyr::select(studies, lead_sponsor_class, study_type, purpose, allocation, phase, assignment, masking, gender, age_max_type, age_min_type ) %>% 
+  mutate_all(tidyr::replace_na, replace = 'Missing')  # replace all missing
+cl = kmodes(for.cluster, 10)
+# check which variables do not differ and remove them
+diffs = sapply(sapply(cl$modes, unique), length)
+removed = names(cl$modes)[diffs == 1]
+to_table = cl$modes[, diffs > 1 ] %>%
+  mutate(count=cl$size) %>%
+  arrange(-count) %>%
+  mutate(count = format(count, big.mark = ','))
+ftab = flextable(to_table) %>%
+  fontsize(size = 7, part = "all") %>%
+  theme_box()
+ftab
+```

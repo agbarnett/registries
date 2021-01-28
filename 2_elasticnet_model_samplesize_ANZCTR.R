@@ -1,11 +1,12 @@
 # 2_elasticnet_model_samplesize_ANZCTR.R
 # elastic net model for predicting target sample size
 # version for ANZCTR data
-# used by 2_anzctr_summary.Rmd
-# December 2020
+# used by 3_anzctr_summary.Rmd
+# January 2021
 library(dplyr)
 library(ggplot2)
 library(glmnet)
+library(broom)
 library(stringr)
 library(vctrs)
 library(olsrr) # for VIF
@@ -20,90 +21,34 @@ Interventional,actual,age_limit_minExactly 18,age_limit_min Over 18
 
 # get the registry data
 load('data/AnalysisReady.RData') # from 0_read_data_anzctr.R 
-
-## Prepare data for regression model
-# change missing to a category
-for.model = filter(studies, 
-                   !is.na(gender),  # just 4 missing gender
-                   !is.na(submitted),  # just 3 missing date
-                   !is.na(ccode1)) %>% # just 8 missing
-  mutate(
-    date = as.numeric(submitted - as.Date('2010-01-01')) / (5*365.25), # standardised to five years
-    # secondary outcomes is horribly skewed, so log
-    n_secondary = log2(n_secondary+1),
-    n_primary = log2(n_primary+1),
-    ## make combined age limit variable
-    # first change missing to not stated
-    age_min_type = ifelse(is.na(age_min_type), 'Not stated', age_min_type),
-    age_max_type= ifelse(is.na(age_max_type), 'Not stated', age_max_type),
-    # max age
-    age_limit_max = case_when(
-      age_max_type == 'No limit' ~ 'No limit',
-      age_max_type == 'Not stated' ~ 'Not stated',
-      age_max_type == 'Restricted' & age_max <18  ~ 'Under 18',
-      age_max_type == 'Restricted' & age_max ==18  ~ 'Exactly 18',
-      age_max_type == 'Restricted' & age_max >18  ~ 'Over 18'
-    ),
-    # min age
-    age_limit_min = case_when(
-      age_min_type == 'No limit' ~ 'No limit',
-      age_min_type == 'Not stated' ~ 'Not stated',
-      age_min_type == 'Restricted' & age_min <18  ~ 'Under 18',
-      age_min_type == 'Restricted' & age_min ==18  ~ 'Exactly 18',
-      age_min_type == 'Restricted' & age_min >18  ~ 'Over 18'
-    ),
-    # lastly, if missing then add category
-    age_limit_min = ifelse(is.na(age_limit_min), 'Missing', age_limit_min),
-    age_limit_max = ifelse(is.na(age_limit_max), 'Missing', age_limit_max),
-    # add categories for missing
-    assignment = ifelse(is.na(assignment), 'Missing', assignment),
-    masking = ifelse(is.na(masking), 'Missing', masking),
-    purpose = ifelse(is.na(purpose), 'Missing', purpose),
-    intervention_code = ifelse(is.na(intervention_code), 'Missing', intervention_code),
-    control = ifelse(is.na(control), 'Missing', control),
-    phase = ifelse(is.na(phase), 'Missing', phase),
-    endpoint = ifelse(is.na(endpoint), 'Missing', endpoint)
-  ) %>%
-  filter(!is.na(age_limit_max),
-         !is.na(age_limit_min)) %>% # exclude few missing new age variable
-  # set reference levels for categorical variables
-  mutate(purpose = relevel(factor(purpose), ref='Treatment'),
-         assignment = relevel(factor(assignment), ref='Parallel'),
-         masking = relevel(factor(masking), ref='Blinded (masking used)'),
-         intervention_code = relevel(factor(intervention_code), ref='Treatment: Drugs'),
-    control = relevel(factor(control), ref='Active'),
-    phase = relevel(factor(phase), ref='Phase 3'),
-    endpoint = relevel(factor(endpoint), ref='Efficacy'),
-    gender = relevel(factor(gender), ref='All'),
-    provisional = relevel(provisional, ref='No'),
-    study_status = relevel(factor(study_status), ref='Completed'),
-    age_limit_min = relevel(factor(age_limit_min), ref='No limit'),
-    age_limit_max = relevel(factor(age_limit_max), ref='No limit'),
-    ccode1 = relevel(factor(ccode1), ref='Cardiovascular'))
-## merge from funding data?
-# simpler funder
-#simple_funder = case_when(
-#  funding=='ARC' ~ 1,
-#  funding=='NHMRC' ~ 2,
-#  TRUE ~ 3,
-#),
-#simple_funder = factor(simple_funder, levels=1:3, labels=c('ARC','NHMRC','Other'))
+source('2_prep_ANZCTR.R') # prepare data for regression model
 
 ## split by: 1) observational or not, 2) actual or target
-all_ests = variables_excluded = numbers = NULL
+all_ests = variables_excluded = numbers = vars = xval = NULL
 standard_models = list()
 types = c('Observational','Interventional')
 otypes = c('target','actual') # outcome (target or actual sample size)
 for (otype in otypes){
 for (stype in types){
   cat(otype, ', ', stype,'\n', sep='')
+  mtype = paste(otype, stype) # combined
   set.seed(30991199) # for x-validation
   
   ## make design matrix
-  # not included ethics variables (not clear causal pathway), ccode2 (too detailed)
-  vars_to_include = c('date','gender','age_limit_max','age_limit_min','purpose','masking','assignment','intervention_code',
-                      'control','phase','endpoint','n_primary','n_secondary','ccode1','n_funding','provisional')
-  if(otype == 'actual'){vars_to_include = c(vars_to_include, 'study_status')}
+  # not included: ethics variables (not clear causal pathway), ccode2 (too detailed)
+  vars_to_include = c('date','gender','age_limit_max','age_limit_min',
+                      'control','endpoint','n_primary','n_secondary','ccode1','n_funding','provisional')
+  if(otype == 'actual'){vars_to_include = c(vars_to_include, 'study_status')} # just for actual sample size
+  if(stype == 'Interventional'){
+    vars_to_include = c(vars_to_include, 'phase','purpose','masking','assignment','intervention_code') # add trial details ****
+    this_vars = data.frame(stype = 'Interventional', variables = vars_to_include)
+    vars = bind_rows(vars, this_vars) # for variable summary table
+  }
+  if(stype == 'Observational'){
+    this_vars = data.frame(stype = 'Observational', variables = vars_to_include) # no additional variables for observational data
+    vars = bind_rows(vars, this_vars) # for variable summary table
+  } 
+
   # formula without intercept:
   formula = paste('log(samplesize_target) ~ -1 +', paste(vars_to_include, collapse = '+'))
   
@@ -139,9 +84,17 @@ enet_model = glmnet(y=y, x=X, alpha=0.95)
 plot(enet_model, main=paste(stype, ', ', otype, sep=''))
 
 # x-validation to find best cut-off
-enet_xval = cv.glmnet(y=y, x=X, alpha=0.95)
-plot(enet_xval, main=paste(stype, ', ', otype, sep=''))
-beta = coef(enet_xval, s='lambda.1se')
+cv_enet_xval = cv.glmnet(y=y, x=X, alpha=0.95)
+plot(cv_enet_xval, main=paste(stype, ', ', otype, sep=''))
+beta = coef(cv_enet_xval, s='lambda.1se')
+# store x-validation results for later plotting:
+cv_ests = tidy(cv_enet_xval) %>%  
+  mutate(
+    lambda.1se = cv_enet_xval$lambda.1se, # add lambda min and 1SE
+    lambda.min = cv_enet_xval$lambda.min,
+    outcome = otype, # add outcome
+    study_type = stype) # add model type
+xval = bind_rows(xval, cv_ests)
 
 ## re-run standard model for best coefficients with confidence intervals ##
 update_vars_to_include = row.names(beta)[which(beta!=0)]
@@ -161,14 +114,13 @@ all_ests = bind_rows(all_ests, standard_model_ests) # concatenate nicely formatt
 if(ncol(X.dash)==0){ # in no variables remaining
   standard_model = NULL
 }
-model_name = paste(stype, otype, sep=', ')# 
-standard_models[[model_name]] = standard_model # concatenate entire model
+standard_models[[mtype]] = standard_model # concatenate entire model
 
-## compare lasso and standard model estimates ##
-lasso_beta = data.frame(term=row.names(beta), beta = beta[,1]) %>%
+## compare enet and standard model estimates ##
+enet_beta = data.frame(term=row.names(beta), beta = beta[,1]) %>%
   filter(beta !=0)
-row.names(lasso_beta) = NULL
-compare = full_join(standard_model_ests, lasso_beta, by='term') %>%
+row.names(enet_beta) = NULL
+compare = full_join(standard_model_ests, enet_beta, by='term') %>%
   mutate(diff = beta - estimate,
          av = (beta+estimate)/2) %>%
   filter(term !='(Intercept)') # don't need to see intercept
@@ -177,10 +129,10 @@ cplot = ggplot(data=compare, aes(x=av, y=diff, label=term))+
   geom_point()+
   ggtitle(stype)+
   xlab('Average')+
-  ylab('Difference (lasso minus standard)')+
+  ylab('Difference (elastic net minus standard)')+
   geom_label(size=2)+
   theme_bw()
-outfile = paste('figures/bland_altman_lasso_standard_clintrials_', stype, '.jpg', sep='')
+outfile = paste('figures/bland_altman_enet_standard_clintrials_', stype, '.jpg', sep='')
 jpeg(outfile, width=5, height=4.5, units='in', res=300)
 print(cplot)
 dev.off()
@@ -205,7 +157,7 @@ if(is.null(standard_model) == FALSE){
 
 # save processed data and mode estimates
 which_data = 'anzctr'
-save(which_data, numbers, standard_models, all_ests, variables_excluded, vif, colinear, file='results/ANZCTR_sample_size.RData')
+save(which_data, numbers, standard_models, all_ests, variables_excluded, vif, colinear, xval, file='results/ANZCTR_sample_size.RData')
 
 # compare interventional/observational estimates
 to_plot = filter(all_ests, 
@@ -216,3 +168,32 @@ compare_plot = ggplot(to_plot, aes(x=term, y=estimate, col=factor(study_type)))+
   coord_flip()+
   theme(legend.position = 'top')
 compare_plot
+
+## save variable list and which were log-transformed
+# list of log-transformed variables
+logged.vars = c('n_primary', 'n_secondary', 'n_condition', 'n_arms')
+vars = unique(vars) %>% # remove duplicates due to target/actual repeat
+  mutate(database = 'ANZCTR',
+         categories = '', # prepare
+         log = as.numeric(variables %in% logged.vars),
+         log = factor(log, levels=0:1, labels=c('No','Yes')))
+# add variable categories for character, factor and logical variables
+all_character_variables = names(studies[, sapply(studies, class) %in% c('character','factor')])
+all_logical_variables = names(studies[, sapply(studies, class) == 'logical'])
+character_variables = intersect(all_character_variables, unique(vars$variables)) # just the predictors
+logical_variables = intersect(all_logical_variables, unique(vars$variables)) # just the predictors
+for (c in character_variables){
+  temporary = select(studies, all_of(c)) %>% pull(c)  
+  categories = unique(temporary)
+  categories = categories[!is.na(categories)] # remove missing
+  index = vars$variables == c
+  vars$categories[index] = paste(categories, collapse=', ', sep='')
+}
+for (c in logical_variables){
+  temporary = select(studies, all_of(c)) %>% pull(c)  
+  index = vars$variables == c
+  vars$categories[index] = "Yes, No"
+}
+
+# save
+save(vars, file='results/var_list_anzctr.RData')

@@ -1,0 +1,47 @@
+---
+title: "Variables removed because they were co-linear"
+output: pdf_document
+classoption: portrait
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message=FALSE, error=FALSE, comment='', dpi=400)
+options(width=1000) # Wide pages
+options(scipen=999) # avoid scientific presentation
+
+library(dplyr)
+library(stringr)
+library(flextable)
+```
+
+Co-linearity was assessed using a threshold of 5 for the variance inflation factor. These are for the models of target and actual sample size.
+
+## clintrials.gov
+
+```{r}
+# get the results
+load('results/clintrials_sample_size.RData') # from 2_elasticnet_model_samplesize_clintrial.R
+# nicer labels and names
+colinear = mutate(colinear, 
+  variable = str_replace_all(string=variable, pattern='allocation', replacement=' allocation = '),
+  variable = str_replace_all(string=variable, pattern='min', replacement=' min = '),
+  colinear_with = str_replace_all(string=colinear_with, pattern='min', replacement=' min = '),
+  colinear_with = str_replace_all(string=colinear_with, pattern='assignment', replacement=' assignment = '),
+  variable = str_replace_all(string=variable, pattern='_', replacement=' '),
+  colinear_with = str_replace_all(string=colinear_with, pattern='_', replacement=' ')) %>%
+  rename('Study design' = 'stype',
+         'Sample size' = 'outcome',
+         'Variable removed' = 'variable',
+         'Was colinear with' = 'colinear_with')
+#
+ftab = flextable(colinear) %>%
+	theme_box()%>%
+	autofit()
+ftab
+```
+
+## ANZCTR
+
+No variables were removed.
+
+\thispagestyle{empty} 

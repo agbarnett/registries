@@ -1,0 +1,367 @@
+---
+title: "ANZCTR dumped"
+author: "Adrian Barnett"
+date: "22/05/2020"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# dumped from ANZCTR summary
+
+```{r}
+    decade = case_when(
+            is.na(year) ~ 'Missing',
+            year < 2000 ~ "Pre 2000",
+            year >= 2000 & year <2005 ~ "2000 to 2004",
+            year >= 2005 & year <2010 ~ "2005 to 2009",
+            year >= 2010 & year <2015 ~ "2010 to 2014",
+            year >= 2015 ~ "2015 or after",
+          ),
+```
+
+## Elastic net
+
+```{r}
+library(glmnet)
+# set up variables
+ff = log2(samplesize+1) ~ gender + studytype + phase + masking + decade
+m <- model.frame(ff, for.model)
+mat <- model.matrix(ff, m)
+y = log2(for.model$samplesize+1)
+smodel = glmnet(y=y, x=mat, alpha=0.95)
+plot(smodel)
+```
+
+```{r}
+cvfit = cv.glmnet(x=mat, y=y)
+plot(cvfit)
+```
+
+```{r}
+coef(cvfit, s = "lambda.1se")
+```
+
+
+```{r}
+library(selectiveInference)
+result = randomizedLasso(X=mat, y=y, lam=0.95)
+inf_result = randomizedLassoInf(result)
+```
+
+### Plot of mean sample size by phase
+
+The plot shows the predicted mean from the regression model with 95% confidence intervals.
+
+```{r}
+# plot predictions
+pred = dplyr::select(for.model, gender, phase, studytype, masking) %>%
+  unique() %>%
+  mutate(date  = 0) # reference value
+fit = predict(smodel, newdata=pred, se.fit = TRUE)
+z = qnorm(0.975)
+pred$fit = fit$fit
+pred$se = fit$se.fit
+pred = mutate(pred, 
+   lower = fit - (z*se),
+   upper = fit + (z*se),
+   fit = (2^fit) -1, # back transform
+   lower = (2^lower) -1,
+   upper = (2^upper) -1)
+# select data to plot
+to.plot = filter(pred, gender=='Both males and females',
+                       studytype=='Interventional',
+                       masking == 'Blinded (masking used)')
+pplot = ggplot(data=to.plot , aes(x=phase, y=fit, ymin=lower, ymax=upper))+
+  geom_point()+
+  geom_errorbar(width=0)+
+  g.theme+
+  coord_flip()+
+  xlab('')+
+  ylab('Sample size')
+pplot
+```
+
+
+## Principal components analysis
+
+```{r}
+library(PCAmixdata)
+# to do: would be better to turn age_min and age_max into numbers
+# not needed for PCA - remove free text condition
+for.pca = select(studies, -pub, -year, -time, -ID, -id, -address, -number, -condition) 
+# split by continuous and categorical
+split <- splitmix(for.pca) # split into quant and qual data
+X1 <- split$X.quanti 
+X2 <- split$X.quali 
+res.pcamix <- PCAmix(X.quanti=X1, X.quali=X2, rename.level=TRUE, graph=FALSE)
+```
+
+```{r}
+# plot the PCA results
+par(mfrow=c(2,2))
+plot(res.pcamix,choice="ind",coloring.ind=X2$houses,label=FALSE,
+      posleg="bottomright", main="Observations")
+plot(res.pcamix, choice="levels", xlim=c(-1.5,2.5), main="Levels")
+plot(res.pcamix, choice="cor", main="Numerical variables")
+plot(res.pcamix, choice="sqload", coloring.var=T, leg=TRUE,
+     posleg="topright", main="All variables")
+```
+
+### Funders, top combinations
+
+```{r, results='asis'}
+# get combinations 
+combs <-  dplyr::select(funding_data, number, name)  %>%
+  as_tibble() %>%
+  filter(!is.na(name))
+# now make list from group responses
+list_resp = group_by(combs, number) %>%
+  summarise(responses = list(name))
+# plot
+cplot = ggplot(list_resp, aes(x = responses)) +
+    geom_bar(aes(y=..count../sum(..count..)), fill = "indianred3") +
+    theme_bw() +
+    xlab("Funders") +
+    ylab("Proportion of studies") +
+    scale_x_upset(n_intersections = 10)+
+    g.theme+
+  theme(text=element_text(size=14),
+        plot.margin = margin(t = 0, r = 0, b = 0, l = 120, unit = "pt")) # extend margin for labels
+cplot
+```
+
+## Common characteristics
+
+Below we show the top ten characteristics of studies in terms of study type, purpose and masking.
+
+```{r, fig.width=8, fig.height=6}
+# get combinations 
+combs <-  dplyr::select(studies, purpose, masking, study_type, ID)  %>%
+  as_tibble() %>%
+  tidyr::gather(key='characteristic', value='response', -ID) %>%
+  filter(!is.na(response),
+         response != 'Not Applicable') %>%
+  dplyr::select(-characteristic)
+# now make list from group responses
+list_resp = group_by(combs, ID) %>%
+  summarise(responses = list(response))
+# plot
+cplot = ggplot(list_resp, aes(x = responses)) +
+    geom_bar(aes(y=..count../sum(..count..)), fill = "indianred3") +
+    theme_bw() +
+    xlab("Study characteristics") +
+    ylab("Proportion of studies") +
+    scale_x_upset(n_intersections = 10)+
+    g.theme+
+  theme(text=element_text(size=14),
+        plot.margin = margin(t = 0, r = 0, b = 0, l = 120, unit = "pt")) # extend margin for labels
+cplot
+```
+
+
+## Principal components analysis
+
+```{r}
+library(PCAmixdata)
+# to do: would be better to turn age_min and age_max into numbers
+# use small subset of variables
+for.pca = select(studies, submitted, study_type, assignment, endpoint, control, n_primary, n_secondary ) 
+# split by continuous and categorical
+split <- splitmix(for.pca) # split into quant and qual data
+X1 <- split$X.quanti 
+X2 <- split$X.quali 
+res.pcamix <- PCAmix(X.quanti=X1, X.quali=X2, rename.level=TRUE, graph=FALSE)
+```
+
+```{r, fig.width=8, fig.height=8}
+# plot the PCA results
+par(mfrow=c(2,2))
+plot(res.pcamix,choice="ind",coloring.ind=X2$houses,label=FALSE,
+      posleg="bottomright", main="Observations")
+plot(res.pcamix, choice="levels", xlim=c(-1.5,2.5), main="Levels")
+plot(res.pcamix, choice="cor", main="Numerical variables")
+plot(res.pcamix, choice="sqload", coloring.var=T, leg=TRUE,
+     posleg="topright", main="All variables")
+```
+
+### Comparing target and achieved sample size
+
+Below we show a Bland-Altman plot using all the data on the original scale. The results are dominated by a few very large studies, hence we need to re-scale the data.
+
+```{r}
+to_plot = filter(studies, !is.na(samplesize_actual)) %>%
+  mutate(diff = samplesize_actual - samplesize_target,
+         aver = (samplesize_actual + samplesize_target)/2 )
+ba.plot = ggplot(data=to_plot, aes(x=aver, y=diff))+
+  geom_point(pch=1)+
+  xlab('Average sample size')+
+  ylab('Difference (Actual minus Target)')+
+  g.theme
+ba.plot 
+```
+
+### Restricted plot to exclude outliers
+
+```{r}
+# stats
+z = qnorm(0.975)
+stats = filter(to_plot, aver < 1000) %>%
+  summarise(mean=mean(diff), sd=sd(diff)) %>%
+  mutate(lower = mean - z*sd, # limits of agreement
+         upper = mean + z*sd)
+# plot
+ba.plot + coord_cartesian(xlim=c(0,1000), ylim=c(-2000,2000))+
+  geom_hline(lty=2, col='red', yintercept = stats$mean)+
+  geom_hline(lty=2, col='green', yintercept = stats$lower)+
+  geom_hline(lty=2, col='green', yintercept = stats$upper)
+```
+
+The Bland-Altman plot above is restricted to exclude the few outliers from very large studies.
+
+### Comparing target and achieved sample size
+
+We use a log-transformation (base e) to remove the strong skew in the sample sizes.
+
+```{r}
+# log-transformed version
+to_plot = filter(studies, 
+                 !is.na(samplesize_actual)) %>% # remove missing
+  mutate(
+    samplesize_target_log = log(samplesize_target+0.1), # add small constant because of zeros
+    samplesize_actual_log = log(samplesize_actual+0.1),
+    diff = samplesize_actual_log - samplesize_target_log,
+    diff_perc = 100*(exp(diff)-1), # percent difference
+    aver = (samplesize_actual_log + samplesize_target_log)/2 )
+# check
+#filter(to_plot, diff< log(0.1)) %>% select(samplesize_target, samplesize_actual) # where sample was 10% of target
+# stats
+stats = summarise(to_plot, mean=mean(diff), sd=sd(diff)) %>%
+  mutate(lower = mean - z*sd, # limits of agreement
+         upper = mean + z*sd)
+# label log axis
+x.labels = c(1,5,50,500,5000,50000)
+x.ticks = log(x.labels+1)
+y.labels = c(0.1,0.25,1,4,10) # relative (like a risk ratio); symmetric
+y.ticks = log(y.labels)
+# plot
+ba.plot_log2 = ggplot(data=to_plot, aes(x=aver, y=diff))+
+  geom_point(pch=1)+
+  scale_x_continuous(breaks=x.ticks, labels=x.labels)+
+  scale_y_continuous(breaks=y.ticks, labels=y.labels)+
+  xlab('Average sample size (log scale)')+
+  ylab('Relative difference (Actual minus Target)')+
+  geom_hline(lty=2, col='red', yintercept = stats$mean)+
+  geom_hline(lty=2, col='green', yintercept = stats$lower)+
+  geom_hline(lty=2, col='green', yintercept = stats$upper)+
+  g.theme
+ba.plot_log2 
+```
+
+The Bland-Altman plot above shows the 95% limits of agreement as horizontal green lines, which are `r roundz(exp(stats$lower),2)` to `r roundz(exp(stats$upper),2)`. 
+
+### Bland-Altman plot for sample size difference using a density plot
+
+The dots in the above plot make it hard to see where most of the observations are.
+The plot below shows the density.
+
+```{r}
+to_tile = mutate(to_plot,
+                 diff_bin = round(diff),
+                 diff_aver = round(aver*3)/3) %>%
+  group_by(diff_bin, diff_aver) %>%
+  summarise(n=n()) %>%
+  ungroup()
+tile_plot = ggplot(data=to_tile, aes(x=diff_aver, y=diff_bin, fill=n))+
+  geom_tile()+
+  scale_x_continuous(breaks=x.ticks, labels=x.labels)+
+  scale_y_continuous(breaks=y.ticks, labels=y.labels)+
+  scale_fill_viridis_c()+
+  xlab('Average (log scale)')+
+  ylab('Relative difference (Actual minus Target)')+
+  g.theme
+tile_plot
+```
+
+## Regression model of difference against average
+
+We used a Bayesian model to examine the difference in the sample size (actual minus target) against the average sample size.
+
+```{r}
+# get the bayesian results
+load('results/bland_altman_bayes_model.RData') # from 2_bayes_model_sample_diff.R
+res = data.frame(bugs.results$summary[,c(1,3,7)])
+names(res) = c('mean','lower','upper'); res$var = row.names(res)
+# regression model for tau
+reg_parms = filter(res, str_detect(string=var, pattern='alpha|beta'))
+reg_parms_nice = mutate(reg_parms, cell = paste(roundz(mean,2), ' (', roundz(lower,2), ' to ', roundz(upper,2), ')', sep=''),
+         Term = case_when(
+           str_detect(var, 'alpha') ~ 'Mean',
+           str_detect(var, 'beta') ~ 'Precision'
+         ),
+         var = case_when(
+           str_detect(var, '1') ~ 'Intercept',
+           str_detect(var, '2') ~ 'Slope',
+           str_detect(var, '3') ~ 'Quadratic'
+         ))  %>%
+  select(Term, var, cell) %>%
+  rename('Variable' = 'var',
+         'Mean (95% CI)' = 'cell')
+ftab = flextable(reg_parms_nice) %>%
+  theme_box() %>%
+  autofit()
+ftab
+# mean difference and CI (for text below) 
+mean.diff = filter(res, var=='alpha')
+```
+
+The results above are the estimated parameters from the regression model fitted to the data shown in the Bland-Altman plot.
+The regression was the difference against the average, and we allowed both the mean and the precision (inverse-variance) to depend on the average sample size.
+The means and 95% CIs from the above table show that both the intercept and quadratic were statistically significant for the mean and precision. So there was a non-linear change in mean and the precision.
+
+The regression model results above are relatively difficult to interpret, so we plot the estimates below. The mean difference is the solid line and the shaded area is a 95% credible interval for the difference which highlights the changing precision. The plot also shows the studies that fall outside the 95% credible interval limits.
+
+```{r}
+# un-centre predication locations
+preds_av = av.pred + mean_aver
+# extract bayes parameters
+alpha_1 = filter(reg_parms, var=='alpha[1]')$mean
+alpha_2 = filter(reg_parms, var=='alpha[2]')$mean
+alpha_3 = filter(reg_parms, var=='alpha[3]')$mean
+beta_1 = filter(reg_parms, var=='beta[1]')$mean
+beta_2 = filter(reg_parms, var=='beta[2]')$mean
+beta_3 = filter(reg_parms, var=='beta[3]')$mean
+# add outliers by reconstructing bayes limits
+add_outliers = select(to_plot, aver, diff) %>%
+  mutate(
+  c_aver = aver - mean_aver,
+  est_mean = alpha_1 + (c_aver * alpha_2) + (c_aver * c_aver *alpha_3),
+  est_tau = beta_1 + (c_aver * beta_2) + (c_aver * c_aver *beta_3),
+  est_sigma = 1/sqrt(est_tau),
+  z = qnorm(0.90),
+  lower = est_mean - (z*est_sigma),
+  upper = est_mean + (z*est_sigma)
+) %>%
+filter(diff > upper | diff < lower)
+# to here, add outlier studies; dotted line at 1
+to_plot_diff = filter(res, str_detect(string=var, pattern='diff')) %>%
+  mutate(xaxis= preds_av)
+plot = ggplot(data=to_plot_diff, aes(x=xaxis, y=mean, ymin=lower, ymax=upper))+
+  geom_ribbon(alpha=0.2)+
+  geom_line(size=1.05)+
+  geom_point(data=add_outliers, aes(x=aver, y=diff))+
+  scale_x_continuous(breaks=x.ticks, labels=x.labels)+
+  scale_y_continuous(breaks=y.ticks, labels=y.labels)+
+  xlab('Average (log scale)')+
+  ylab('Relative difference (Actual minus Target)')+
+  g.theme
+plot
+```
+
+The averaged difference on the scale of relative was estimated as `r roundz(exp(mean.diff$mean),2)` with a 95% credible interval of `r roundz(exp(mean.diff$lower),2)` to `r roundz(exp(mean.diff$upper),2)`. So on average, sample sizes are `r roundz(100*(exp(mean.diff$mean)-1),2)`% smaller than their target. However, the mean difference is larger for smaller studies, and for larger studies the mean difference is close to 1.
+
+The variance in the difference is narrowest for sample sizes around 500, suggesting studies of this size more often have an actual sample size that is nearer the target.
+
+There are more individual studies that fall outside the credible intervals that are below the shaded area. These are studies that recruited far fewer patients than expected. A lot of these points are between 5 and 500. 

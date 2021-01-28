@@ -1,0 +1,98 @@
+---
+title: "Histograms of residuals"
+output: pdf_document
+classoption: portrait
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message=FALSE, error=FALSE, comment='', dpi=400)
+options(width=1000) # Wide pages
+options(scipen=999) # avoid scientific presentation
+
+library(dplyr)
+library(ggplot2)
+g.theme = theme_bw() + theme(panel.grid.minor = element_blank())
+```
+
+These are the residuals for the models of target and actual sample size.
+
+## clintrials.gov
+
+```{r, fig.width=6, fig.height=6}
+# get the results
+load('results/clintrials_sample_size.RData') # from 2_elasticnet_model_samplesize_clintrial.R
+#
+all_res = NULL
+for (outcome_type in c('target','actual')){ # get residuals for both 
+  for (model in c('Interventional','Observational')){ # get residuals for both 
+    mtype = paste(outcome_type, model)
+    mtype_nice = paste(stringr::str_to_sentence(outcome_type), model, sep=', ')
+    res = data.frame(res = resid(standard_models[[mtype]]))
+    frame = data.frame(model=mtype_nice, res=res)
+    all_res = bind_rows(all_res, frame)
+  }
+}
+rplot = ggplot(all_res, aes(x=res))+
+  geom_histogram(fill='firebrick3')+
+  g.theme+
+  xlab('Residual (log-scale)')+
+  ylab('Count')+
+  facet_wrap(~model, scales='free')
+rplot
+```
+
+The plot shows the residuals for the actual and target sample size, and for the interventional and observational studies.
+The x- and y-axes vary by panel.
+
+\thispagestyle{empty} 
+
+## ANZCTR
+
+```{r, fig.width=6, fig.height=6}
+# get the results
+load('results/ANZCTR_sample_size.RData')
+#
+all_res = NULL
+for (outcome_type in c('target','actual')){ # get residuals for both 
+  for (model in c('Interventional','Observational')){ # get residuals for both 
+    mtype = paste(outcome_type, model)
+    mtype_nice = paste(stringr::str_to_sentence(outcome_type), model, sep=', ')
+    res = data.frame(res = resid(standard_models[[mtype]]))
+    frame = data.frame(model=mtype_nice, res=res)
+    all_res = bind_rows(all_res, frame)
+  }
+}
+rplot = ggplot(all_res, aes(x=res))+
+  geom_histogram(fill='darkorange1')+
+  g.theme+
+  xlab('Residual (log-scale)')+
+  ylab('Count')+
+  facet_wrap(~model, scales='free')
+rplot
+```
+
+\thispagestyle{empty} 
+
+## Models of the target to actual sample size ratio
+
+```{r}
+# get the results
+load('results/sample_size_ratio.RData') # from 2_model_actual_target_ratio.R
+
+all_res = NULL
+for (model in c('Interventional','Observational')){ # get residuals for both 
+    res = data.frame(res = resid(standard_models[[model]]))
+    frame = data.frame(model=model, res=res)
+    all_res = bind_rows(all_res, frame)
+}
+rplot = ggplot(all_res, aes(x=res))+
+  geom_histogram(fill='seagreen3')+
+  g.theme+
+  xlab('Residual (log-scale)')+
+  ylab('Count')+
+  facet_wrap(~model, scales='free')
+rplot
+```
+
+\thispagestyle{empty} 
+

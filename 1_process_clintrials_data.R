@@ -14,12 +14,28 @@ all_excluded = all_studies = NULL
 for (file in to_process){
   infile = paste('data/raw/', file, sep='')
   load(infile)
-  all_excluded = bind_rows(all_excluded, excluded)
+  ## exclude those with: 1) sample size "not stated" or 2) with dummy sample sizes
+  # a) add them to removed
+  ex1 = filter(studies, sample_size_type=='Not stated') %>%
+    select(id, status, study_type) %>%
+    mutate(reason = 'No sample size type')
+  ex2 = filter(studies, sample_size %in% c(9999999, 99999999, 999999999)) %>%
+    select(id, status, study_type) %>%
+    mutate(reason = 'Dummy sample size')
+  # b) remove them from study data
+  studies = filter(studies, 
+                   sample_size_type!='Not stated', 
+                   !sample_size %in% c(9999999, 99999999, 999999999))
+  # concatenate
+  all_excluded = bind_rows(all_excluded, excluded, ex1, ex2)
   all_studies = bind_rows(all_studies, studies)
+  remove(ex1, ex2) # tidy up
 }
 
 # data management
 all_studies = mutate(all_studies,
+                     # combine two types of observational studies
+                     study_type = ifelse(study_type=='Observational [Patient Registry]', 'Observational', study_type),
                      # simplify volunteers
                      volunteers = ifelse(volunteers=='Accepts Healthy Volunteers', 'Yes', volunteers), 
                      # simplify variable as all categories had "assignment",
@@ -27,15 +43,13 @@ all_studies = mutate(all_studies,
                      assignment = ifelse(nchar(assignment)>30, "Missing", assignment), # one very odd result NCT00828919 
                      # small edits
                      lead_sponsor_class = ifelse(lead_sponsor_class=='AMBIG', 'Other', lead_sponsor_class), # just a handful in this category
-                     assignment = ifelse(masking=='Deep Brain Stimulation', 'Missing', assignment), # just one
+                     assignment = ifelse(assignment=='Deep Brain Stimulation', 'Missing', assignment), # just one
                      masking = ifelse(masking=='open', 'None', masking), # tiny edits
-                     masking = ifelse(masking=='Blinded|Dynamic|Investigator|there|This', 'Missing', masking), # one of each
+                     masking = ifelse(masking %in% c('Blinded','Dynamic','Investigator','there','This'), 'Missing', masking), # one of each
+                     phase = ifelse(phase=='NA', 'N/A', phase), # joining two categories
                      # convert to numbers
                      n_arms = as.numeric(n_arms),
-                     # remove what appear to be dummy sample sizes
-                     sample_size = ifelse(sample_size == 9999999, NA, sample_size),
-                     sample_size = ifelse(sample_size == 99999999, NA, sample_size),
-                     sample_size = ifelse(sample_size == 999999999, NA, sample_size),
+                     n_arms = ifelse(is.na(n_arms), 0, n_arms), # replace missing with none
                      #
                      sample_size_type = ifelse(is.na(sample_size) == FALSE & is.na(sample_size_type) == TRUE, 'Not stated', sample_size_type), # if sample size but no type
                      # used below
@@ -55,8 +69,6 @@ for (k in 1:nrow(all_studies)){
 }
 # no longer need these variables
 all_studies = select(all_studies, -min_age, -max_age)
-
-# blank a few impossible dates - to do
 
 ## save
 # rename for simplicity

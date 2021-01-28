@@ -1,0 +1,194 @@
+---
+title: "Variables excluded from final models by the elastic net selection"
+output: pdf_document
+classoption: portrait
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message=FALSE, error=FALSE, comment='', dpi=400)
+options(width=1000) # Wide pages
+options(scipen=999) # avoid scientific presentation
+
+library(dplyr)
+library(stringr)
+library(flextable)
+
+# get the labels
+load('data/labels.RData')
+```
+
+
+# clintrials.gov
+
+```{r, include=FALSE}
+# get the results
+load('results/clintrials_sample_size.RData') # from 2_elasticnet_model_samplesize_clintrial.R
+```
+
+## Target sample size for observational studies
+
+```{r}
+vars_out = filter(variables_excluded,
+              studytype == 'Observational',
+              outcome == 'target') %>%
+  left_join(table_names_clintrials, by=c('variables'='term')) %>% # add nice label
+  filter(!reference) %>% # exclude any stray reference categories
+  select(group, label)
+ftab = flextable(vars_out) %>%
+	theme_box()%>%
+	autofit()
+ftab
+```
+
+## Target sample size for interventional studies
+
+```{r}
+vars_out = filter(variables_excluded,
+              studytype == 'Interventional',
+              outcome == 'target') %>%
+  left_join(table_names_clintrials, by=c('variables'='term')) %>% # add nice label
+  filter(!reference) %>% # exclude any stray reference categories
+  select(group, label)
+ftab = flextable(vars_out) %>%
+	theme_box()%>%
+	autofit()
+ftab
+```
+
+## Actual sample size for observational studies
+
+```{r}
+vars_out = filter(variables_excluded,
+              studytype == 'Observational',
+              outcome == 'actual') %>%
+  left_join(table_names_clintrials, by=c('variables'='term')) %>% # add nice label
+  filter(!reference) %>% # exclude any stray reference categories
+  select(group, label)
+ftab = flextable(vars_out) %>%
+	theme_box()%>%
+	autofit()
+ftab
+```
+
+## Actual sample size for interventional studies
+
+```{r}
+vars_out = filter(variables_excluded,
+              studytype == 'Interventional',
+              outcome == 'actual') %>%
+  left_join(table_names_clintrials, by=c('variables'='term')) %>% # add nice label
+  filter(!reference) %>% # exclude any stray reference categories
+  select(group, label)
+ftab = flextable(vars_out) %>%
+	theme_box()%>%
+	autofit()
+ftab
+```
+
+# ANZCTR
+
+```{r, include=FALSE}
+# get the results
+load('results/ANZCTR_sample_size.RData') # from 2_elasticnet_model_samplesize_ANZCTR.R
+```
+
+## Target sample size for observational studies
+
+```{r}
+vars_out = filter(variables_excluded,
+              study_type == 'Observational',
+              outcome == 'target') %>%
+  left_join(table_names_anzctr, by=c('variables'='term')) %>% # add nice label
+  filter(!reference) %>% # exclude any stray reference categories
+  select(group, label)
+ftab = flextable(vars_out) %>%
+	theme_box()%>%
+	autofit()
+ftab
+```
+
+## Target sample size for interventional studies
+
+```{r}
+vars_out = filter(variables_excluded,
+              study_type == 'Interventional',
+              outcome == 'target') %>%
+  left_join(table_names_anzctr, by=c('variables'='term')) %>% # add nice label
+  filter(!reference) %>% # exclude any stray reference categories
+  select(group, label)
+ftab = flextable(vars_out) %>%
+	theme_box()%>%
+	autofit()
+ftab
+```
+
+
+## Actual sample size for observational studies
+
+```{r}
+vars_out = filter(variables_excluded,
+              study_type == 'Observational',
+              outcome == 'actual') %>%
+  left_join(table_names_clintrials, by=c('variables'='term')) %>% # add nice label
+  filter(!reference) %>% # exclude any stray reference categories
+  select(group, label)
+ftab = flextable(vars_out) %>%
+	theme_box()%>%
+	autofit()
+ftab
+```
+
+## Actual sample size for interventional studies
+
+```{r}
+vars_out = filter(variables_excluded,
+              study_type == 'Interventional',
+              outcome == 'actual') %>%
+  left_join(table_names_clintrials, by=c('variables'='term')) %>% # add nice label
+  filter(!reference) %>% # exclude any stray reference categories
+  select(group, label)
+ftab = flextable(vars_out) %>%
+	theme_box()%>%
+	autofit()
+ftab
+```
+
+
+# Sample size ratio
+
+```{r, include=FALSE}
+# get the results
+load('results/sample_size_ratio.RData') # from 2_model_actual_target_ratio.R
+```
+
+
+## Observational studies
+
+```{r}
+vars_out = filter(variables_excluded,
+              study_type == 'Observational',
+              lambda == 'min') %>%
+  left_join(table_names_clintrials, by=c('variables'='term')) %>% # add nice label
+  filter(!reference) %>% # exclude any stray reference categories
+  select(group, label)
+ftab = flextable(vars_out) %>%
+	theme_box()%>%
+	autofit()
+ftab
+```
+
+## Interventional studies
+
+```{r}
+vars_out = filter(variables_excluded,
+              study_type == 'Interventional',
+              lambda == 'min') %>%
+  left_join(table_names_clintrials, by=c('variables'='term')) %>% # add nice label
+  filter(!reference) %>% # exclude any stray reference categories
+  select(group, label)
+ftab = flextable(vars_out) %>%
+	theme_box()%>%
+	autofit()
+ftab
+```
+
