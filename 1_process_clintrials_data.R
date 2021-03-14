@@ -4,7 +4,7 @@
 library(dplyr)
 library(stringr)
 source('99_functions.R')
-censor.date = as.Date('2020-12-11') # date I downloaded zip
+censor.date = as.Date('2021-02-01') # date I downloaded zip
 
 # find the data
 to_process = dir('data/raw/') # from 0_read_data_clintrials_xml.R
@@ -17,10 +17,10 @@ for (file in to_process){
   ## exclude those with: 1) sample size "not stated" or 2) with dummy sample sizes
   # a) add them to removed
   ex1 = filter(studies, sample_size_type=='Not stated') %>%
-    select(id, status, study_type) %>%
+    select(id, status) %>%
     mutate(reason = 'No sample size type')
   ex2 = filter(studies, sample_size %in% c(9999999, 99999999, 999999999)) %>%
-    select(id, status, study_type) %>%
+    select(id, status) %>%
     mutate(reason = 'Dummy sample size')
   # b) remove them from study data
   studies = filter(studies, 
@@ -34,8 +34,8 @@ for (file in to_process){
 
 # data management
 all_studies = mutate(all_studies,
-                     # combine two types of observational studies
-                     study_type = ifelse(study_type=='Observational [Patient Registry]', 'Observational', study_type),
+                     # combine two types of observational studies - no longer needed 
+                     #study_type = ifelse(study_type=='Observational [Patient Registry]', 'Observational', study_type),
                      # simplify volunteers
                      volunteers = ifelse(volunteers=='Accepts Healthy Volunteers', 'Yes', volunteers), 
                      # simplify variable as all categories had "assignment",
@@ -81,5 +81,5 @@ studies = filter(studies,
           sample_size_type != 'Not stated', # exclude studies without a sample size type
          !is.na(sample_size)) %>% # exclude studies without a sample size
   mutate(sample_size_type = ifelse(sample_size_type=='Anticipated', 'Target', sample_size_type)) %>% # rename
-  select(study_type, sample_size_type, sample_size, purpose, allocation, assignment, phase)
+  select(sample_size_type, sample_size, purpose, allocation, assignment, phase)
 save(censor.date, studies, file='shiny/clinicaltrials_shiny_ready.RData')

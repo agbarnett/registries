@@ -2,6 +2,7 @@
 # output basic study characteristic table in latex
 # January 2021
 library(xtable) # for latex
+library(ggplot2)
 library(dplyr)
 library(tidyr)
 source('99_functions.R')
@@ -10,20 +11,21 @@ source('99_functions.R')
 #
 load('data/AnalysisReady.RData') # from 0_read_data_anzctr.R 
 source('2_prep_ANZCTR.R') # prepare data for regression model
-anzctr = select(for.model, study_type, submitted, gender, age_limit_min, age_limit_max, n_primary, n_secondary, "samplesize_actual", "samplesize_target") %>%
+anzctr = select(for.model, submitted, gender, study_status, age_limit_min, age_limit_max, n_primary, n_secondary, "samplesize_actual", "samplesize_target") %>%
   mutate(database = 'anzctr') 
 #
 load('data/clinicaltrials_analysis_ready.RData') # from 1_process_clintrials_data.R 
 source('2_prep_clintrials.R')
-clintrials = select(for.model, study_type, submitted, gender, age_limit_min, age_limit_max, n_primary, n_secondary, "sample_size", "sample_size_type") %>%
+clintrials = select(for.model, submitted, status, gender, age_limit_min, age_limit_max, n_primary, n_secondary, "sample_size", "sample_size_type") %>%
   mutate(database = 'clintrials',
          samplesize_target = ifelse(sample_size_type=='Anticipated', sample_size, NA),
-         samplesize_actual = ifelse(sample_size_type=='Actual', sample_size, NA))
+         samplesize_actual = ifelse(sample_size_type=='Actual', sample_size, NA)) %>%
+  rename('study_status' = 'status') # to be consistent
 #
 to_table = bind_rows(anzctr, clintrials)
 
 # percent variables
-percent_vars = c('gender', 'age_limit_min', 'age_limit_max','study_type')
+percent_vars = c('gender','study_status') # , 'age_limit_min', 'age_limit_max'
 freq = select(to_table, database, all_of(percent_vars)) %>%
   gather(key='var', value='res', -`database`) %>%
   group_by(database, var, res) %>%

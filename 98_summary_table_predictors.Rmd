@@ -1,7 +1,7 @@
 ---
 title: "Tables of predictor variables in the two trial registries"
 output: pdf_document
-classoption: landscape
+geometry: margin=2cm
 ---
 
 ```{r, include=FALSE}
@@ -12,28 +12,23 @@ options(scipen=999) # avoid scientific presentation
 library(dplyr)
 library(stringr)
 library(flextable)
+
 ## get the data
+
+# 0) labels
+load('data/labels.RData') # for mandatory
+
 # a) clintrials.gov
 load('results/var_list_clintrials.RData') # from 2_elasticnet_model_samplesize_clintrial.R
-# create observational / interventional variable
-int = filter(vars, stype=='Interventional') %>% select(-stype, -database)
-obs = filter(vars, stype=='Observational') %>% select(-stype, -database)
-vars = full_join(int, obs, by=c('variables','categories','log')) %>%
-  mutate(stype = 'Interventional',
-         stype = ifelse(variables %in% int$variables & variables %in% obs$variables, 'Interventional/Observational', stype),
-         stype = ifelse(!variables %in% int$variables & variables %in% obs$variables, 'Observational', stype))
-clintrials_vars = select(vars, variables, stype, categories, log) # column ordering
+# add mandatory, needs some management
+vars = left_join(vars, mandatory_clintrials, by=c('variables'='var'))
+clintrials_vars = select(vars, variables, categories, mandatory, log) # column ordering
 
 # b) ANZCTR
 load('results/var_list_anzctr.RData') # from 2_elasticnet_model_samplesize_ANZCTR.R
-# create observational / interventional variable
-int = filter(vars, stype=='Interventional') %>% select(-stype, -database)
-obs = filter(vars, stype=='Observational') %>% select(-stype, -database)
-vars = full_join(int, obs, by=c('variables','categories','log')) %>%
-  mutate(stype = 'Interventional',
-         stype = ifelse(variables %in% int$variables & variables %in% obs$variables, 'Interventional/Observational', stype),
-         stype = ifelse(!variables %in% int$variables & variables %in% obs$variables, 'Observational', stype))
-anzctr_vars = select(vars, variables, stype, categories, log) # column ordering
+# add mandatory, needs some management
+vars = left_join(vars, mandatory_anzctr, by=c('variables'='var'))
+anzctr_vars = select(vars, variables, categories, mandatory, log) # column ordering
 ```
 
 
@@ -60,12 +55,10 @@ table_names_anzctr = bind_rows(table_names_anzctr, more_labels)
 # merge with data
 clintrials_vars = left_join(clintrials_vars, table_names_clintrials, by=c("variables" = "term")) %>%
   mutate(Variable = ifelse(is.na(label)==TRUE, str_to_sentence(variables), label)) %>% # sentence case if no label
-  select(Variable, stype, categories, log) %>%
-  rename('Study types' = 'stype')
+  select(Variable, categories, mandatory, log) 
 anzctr_vars = left_join(anzctr_vars, table_names_anzctr, by=c("variables" = "term")) %>%
   mutate(Variable = ifelse(is.na(label), str_to_sentence(variables), label)) %>%
-  select(Variable, stype, categories, log) %>%
-  rename('Study types' = 'stype')
+  select(Variable, categories, mandatory, log) 
 
 ```
 
@@ -73,36 +66,40 @@ anzctr_vars = left_join(anzctr_vars, table_names_anzctr, by=c("variables" = "ter
 
 The tables below show the predictor variables available for the two trial registries that were used in the multiple regression models. 
 
-The "study types" column shows if the variable was available for the Interventional and/or Observational models. 
-
 The "categories" column gives the categories for factors. 
+
+The "mandatory" column indicates whether the variable has to be completed on the databases.
 
 The "log" column indicates whether the variable was log-transformed (base 2). 
 
-## clintrials.gov
+Study status was only used for the models of actual sample size and not the target sample size, this is because the study status was likely to change after the target sample size was set.
 
-\thispagestyle{empty} 
+## clintrials.gov
 
 ```{r}
 # add whether they are mandatory or optional?
 ftab = flextable(clintrials_vars) %>%
-  fontsize(part="body", size=10) %>%
-  width(width=c(2.9, 2, 4.6, 0.3)) %>%
+  fontsize(part="all", size=10) %>%
+  width(width=c(2.1, 4.3, 0.3, 0.3)) %>%
   theme_box()
 ftab
 ```
+\scriptsize
 
-## ANZCTR
+`+` = Mandatory after January 2017
+
+\normalsize
 
 \thispagestyle{empty} 
 
+## ANZCTR
 
 ```{r}
 ftab = flextable(anzctr_vars) %>%
-#  fontsize(size = 8, part = "all") %>%
-  width(width=c(2, 2, 6, 0.4)) %>%
+  fontsize(size = 10, part = "all") %>%
+  width(width=c(2, 5, 0.4, 0.3)) %>%
   theme_box()
 ftab
 ```
 
-Study status was only used for the models of actual sample size and not the target sample size, this is because the study status was likely to change after the target sample size was set.
+\thispagestyle{empty} 

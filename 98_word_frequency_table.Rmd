@@ -1,0 +1,27 @@
+---
+title: "Top ten words in the brief titles of clinicaltrials.gov for studies in women only and men only"
+output: pdf_document
+---
+  
+```{r, include=FALSE}
+### run from 98_word_frequency.R
+
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message=FALSE, error=FALSE, comment='', dpi=400)
+options(width=1000) # Wide pages
+options(scipen=999) # avoid scientific presentation
+
+library(flextable)
+```
+
+
+```{r}
+ftab = select(freqs, gender, word, freq) %>%
+  rename('Count' = 'freq') %>%
+  flextable() %>%
+  merge_v(j=1) %>%
+  theme_box() %>%
+  autofit()
+ftab
+```
+
+Stop words were removed and all text converted to lower case.

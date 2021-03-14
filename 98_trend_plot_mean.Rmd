@@ -1,0 +1,25 @@
+---
+title: "Plot of yearly mean target and actual sample sizes from 1999 to 2020 in clinicaltrials.gov"
+output: pdf_document
+---
+
+```{r, include=FALSE}
+### run from 2_plot_sample_size_by_year.R 
+
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message=FALSE, error=FALSE, comment='', dpi=400)
+options(width=1000) # Wide pages
+options(scipen=999) # avoid scientific presentation
+
+library(dplyr)
+library(glmnet)
+library(ggplot2)
+```
+
+
+```{r}
+print(mplot)
+```
+
+The shaded areas are 95\% bootstrap confidence intervals using 1,000 samples. 
+
+Using the untrimmed mean results in some annual estimates that are influenced by large outliers.

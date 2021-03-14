@@ -96,6 +96,22 @@ The summary statistics are the median and inter-quartile range.
 with(studies, freq(gender, cumul = FALSE, report.nas =TRUE))
 ```
 
+#### Gender over time
+
+```{r}
+to_plot = mutate(studies, year = as.numeric(format(posted, '%Y'))) %>%
+  group_by(year, gender) %>%
+  tally() %>%
+  group_by(year) %>%
+  mutate(percent = 100*prop.table(n))
+gplot = ggplot(data=to_plot, aes(x=year, y=percent, fill=factor(gender)))+
+  geom_histogram(stat='identity', position='stack')+
+  theme_bw()+
+  xlab('Year posted')+
+  ylab('Percent of studies')
+gplot
+```
+
 ## Age included
 
 #### Minimum age
@@ -189,12 +205,6 @@ This plot is just for the `r format(nrow(to.plot), big.mark=',')` studies that h
 The oldest exclusion for maximum age was `r max(to.plot$age_max)` years.
 
 # Study characteristics
-
-## Study type
-
-```{r, results='asis'}
-with(studies, freq(study_type, cumul = FALSE, report.nas =TRUE, order='freq'))
-```
 
 ## Purpose
 
@@ -321,7 +331,8 @@ There is a strong digit preference at multiples of ten. The modal sample size is
 # check if results are already available
 is_results = length(dir('results', pattern = 'clintrials_sample_size')) > 0
 if(is_results == TRUE){
-  load('results/clintrials_sample_size.RData')
+#  load('results/clintrials_sample_size.RData')
+  load('results/clintrials_sample_size.RData') # sensitivity analysis
 }
 if(is_results == FALSE){
   source('2_elasticnet_model_samplesize_clintrial.R')
@@ -330,42 +341,20 @@ if(is_results == FALSE){
 load('data/labels.RData') # from 0_labels.R
 ```
 
-### a) target sample size
-
 ```{r, fig.width=8, fig.height=9}
 to_plot = plot_function(indata = all_ests, 
-                        which_outcome = 'target',  
+                        lsize=8, # make labels smaller
                         ljust=0.35, # move legend at top
                         table_names = table_names_clintrials, 
                         x_limits = seq(-100,300,100),
                         minor_breaks = seq(-100,350,50))
 to_plot
 # export to tall-thin plot
-jpeg('figures/clintrials_sample_size_relative_target.jpg', width=6.5, height=9.5, units='in', res=600)
+jpeg('figures/clintrials_sample_size.jpg', width=6.5, height=9.5, units='in', res=600)
 print(to_plot)
 invisible(dev.off())
 ## export to PLOS ready plot
 tiff('figures/Fig4.tif', width=6.5, height=8.75, units='in', res=600, family='Times New Roman', compression = 'lzw') # 
-print(to_plot)
-invisible(dev.off())
-```
-
-### b) actual sample size
-
-```{r, fig.width=8, fig.height=9}
-to_plot = plot_function(indata = all_ests, 
-                        which_outcome = 'actual', 
-                        ljust=0.35,
-                        table_names = table_names_clintrials, 
-                        x_limits = seq(-100,300,50),
-                        minor_breaks = seq(-100,350,50))
-to_plot
-# export to tall-thin plot
-jpeg('figures/clintrials_sample_size_relative_actual.jpg', width=6.5, height=9.8, units='in', res=600)
-print(to_plot)
-invisible(dev.off())
-## export to PLOS ready plot
-tiff('figures/Fig5.tif', width=6.5, height=8.75, units='in', res=600, family='Times New Roman', compression = 'lzw') # 
 print(to_plot)
 invisible(dev.off())
 ```
@@ -376,16 +365,12 @@ invisible(dev.off())
 ```{r, fig.width=7, fig.height=3.5}
 rsq = all_res = NULL
 for (outcome_type in c('target','actual')){ # get residuals for both 
-  for (model in c('Interventional','Observational')){ # get residuals for both 
-    mtype = paste(outcome_type, model)
-    mtype_nice = paste(stringr::str_to_sentence(outcome_type), model, sep=', ')
-    res = data.frame(res = resid(standard_models[[mtype]]))
-    frame = data.frame(model=mtype_nice, res=res)
+    res = data.frame(res = resid(standard_models[[outcome_type]]))
+    frame = data.frame(model=outcome_type, res=res)
     all_res = bind_rows(all_res, frame)
     # r-squared
     #r = cor(log2(for.model$samplesize_target), fitted(standard_models[[model]])) ^2
     #rsq = c(rsq, r)
-  }
 }
 rplot = ggplot(all_res, aes(x=res))+
   geom_histogram(fill='firebrick3')+

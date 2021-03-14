@@ -1,13 +1,41 @@
 # 0_labels.R
 # labels that help with the plots of the regression models
-# December 2020
+# useful page: https://prsinfo.clinicaltrials.gov/definitions.html
+# February 2021
 library(dplyr)
 
 ## Section 1: ANZCTR labels ##
 
+# list of mandatory (for use by 98_summary_table_predictors.Rmd)
+mandatory_anzctr = read.table(sep='!', header=TRUE, stringsAsFactors = FALSE, text='
+var!mandatory
+samplesize_target!Yes
+date!Yes
+n_primary!Yes
+n_secondary!Yes
+n_funding!Yes
+gender!Yes
+age_limit_max!Yes
+age_limit_min!Yes
+volunteers!Yes
+phase!Yes
+endpoint!No
+purpose!Yes
+masking!No
+allocation!Yes
+assignment!No
+control!Yes
+intervention_code!Yes
+ccode1!Yes
+study_status!Yes
+purposeobs!No
+duration!No
+timing!No')
+#selection!No
+
 # make table of estimates and names, and add reference groups
 # some results put in order of high to low
-g_order = c('continuous', 'Gender', 'Maximum age limit', 'Minimum age limit', 'Provisional', 'Phase', 'Endpoint', 'Purpose', 'Masking', 'Assignment', 'Control', 'Intervention', 'Area', 'Status') # for ordering on plot
+g_order = c('continuous', 'Gender', 'Maximum age limit', 'Minimum age limit', 'Healthy volunteers', 'Phase', 'Endpoint', 'Purpose', 'Masking', 'Assignment', 'Allocation', 'Control', 'Intervention', 'Purpose observational','Duration','Timing','Status', 'Area') # for ordering on plot
 
 # full list of all potential variables and if they are a reference or not
 table_names_anzctr = read.table(sep='!', header=TRUE, stringsAsFactors = FALSE, text='
@@ -20,20 +48,19 @@ continuous!n_funding!Number of funders!FALSE
 Gender!genderMales!Males!FALSE
 Gender!genderFemales!Females!FALSE
 Gender!genderAll!All!TRUE
-Maximum age limit!age_limit_maxOver 18!Over 18!FALSE
-Maximum age limit!age_limit_maxExactly 18!Exactly 18!FALSE
+Maximum age limit!age_limit_max18 or over!18+!FALSE
 Maximum age limit!age_limit_maxUnder 18!Under 18!FALSE
 Maximum age limit!age_limit_maxNo limit!No limit!TRUE
 Maximum age limit!age_limit_maxNot stated!Not stated!FALSE
 Maximum age limit!age_limit_maxMissing!Missing!FALSE
-Minimum age limit!age_limit_minOver 18!Over 18!FALSE
-Minimum age limit!age_limit_minExactly 18!Exactly 18!FALSE
+Minimum age limit!age_limit_min18 or over!18+!FALSE
 Minimum age limit!age_limit_minUnder 18!Under 18!FALSE
 Minimum age limit!age_limit_minNo limit!No limit!TRUE
 Minimum age limit!age_limit_minNot stated!Not stated!FALSE
 Minimum age limit!age_limit_minMissing!Missing!FALSE
-Provisional!provisionalYes!Yes!FALSE
-Provisional!provisionalNo!No!TRUE
+Healthy volunteers!volunteersYes!Yes!FALSE
+Healthy volunteers!volunteersNo!No!TRUE
+Healthy volunteers!volunteersMissing!Missing!FALSE
 Phase!phasePhase 0!Phase 0!FALSE
 Phase!phasePhase 1!Phase 1!FALSE
 Phase!phasePhase 1 / Phase 2!Phase 1/2!FALSE
@@ -60,6 +87,9 @@ Purpose!purposePrevention!Prevention!FALSE
 Masking!maskingOpen (masking not used)!Open!FALSE
 Masking!maskingBlinded (masking used)!Blinded!TRUE
 Masking!maskingMissing!Missing!FALSE
+Allocation!allocationNon-randomised trial!Non-randomised trial!FALSE
+Allocation!allocationRandomised controlled trial!Randomised controlled trial!TRUE
+Allocation!allocationMissing!Missing!FALSE
 Assignment!assignmentCrossover!Crossover!FALSE
 Assignment!assignmentFactorial!Factorial!FALSE
 Assignment!assignmentSingle group!Single group!FALSE
@@ -116,16 +146,68 @@ Status!study_statusSuspended!Suspended!FALSE
 Status!study_statusWithdrawn!Withdrawn!FALSE
 Status!study_statusCompleted!Completed!TRUE
 Status!study_statusActive, not recruiting!Active, not recruiting!FALSE
+Purpose observational!purposeobsNatural history!Natural history!TRUE
+Purpose observational!purposeobsScreening!Screening!FALSE
+Purpose observational!purposeobsPsychosocial!Psychosocial!FALSE
+Duration!durationLongitudinal!Longitudinal!FALSE
+Duration!durationCross-sectional!Cross-sectional!TRUE
+Duration!durationMissing!Missing!FALSE
+Timing!timingRetrospective!Retrospective!FALSE
+Timing!timingProspective!Prospective!TRUE
+Timing!timingBoth!Both!FALSE
 ') %>%
   mutate(group_number = as.numeric(factor(group, levels=g_order))) # add number for ordering
+# dropped:
+#Selection!selectionConvenience sample!Convenience sample!FALSE
+#Selection!selectionDefined population!Defined population!TRUE
+#Selection!selectionRandom sample!Random sample!FALSE
+#Selection!selectionCase control!Case control!FALSE
+#Selection!selectionMissing!Missing!FALSE
 
 ### Section 2: clintrials.gov labels ###
 
+# list of mandatory (for use by 98_summary_table_predictors.Rmd)
+# Yes+ = since 2017
+mandatory_clintrials = read.table(sep='!', header=TRUE, stringsAsFactors = FALSE, text='
+var!mandatory
+date!Yes
+n_primary!Yes
+n_secondary!No
+n_condition!Yes
+n_arms!Yes
+gender!Yes
+age_limit_max!Yes
+age_limit_min!Yes
+volunteers!Yes+
+biological!Yes
+behavioral!Yes
+device!Yes
+combination!Yes
+diagnostic!Yes
+dietary!Yes
+drug!Yes
+other!Yes
+genetic!Yes
+procedure!Yes
+radiation!Yes
+phase!Yes
+lead_sponsor_class!Yes
+purpose!Yes+
+study_design_observational!Yes
+study_design_time!Yes
+masking!Yes+
+assignment!Yes
+allocation!Yes+
+longitudinal!No
+adaptive_trial!No
+status!Yes
+')
+
 # group order for plot
-g_order = c('continuous', 'Gender', 'Maximum age limit', 'Minimum age limit', 'Healthy volunteers', 'Intervention', 'Phase', 'Sponsor', 'Purpose', 'Masking', 'Assignment', 'Allocation', 'Observational design', 'Observational time','Status') # for ordering on plot
+g_order = c('continuous', 'Gender', 'Maximum age limit', 'Minimum age limit', 'Healthy volunteers', 'Intervention', 'Phase', 'Sponsor', 'Purpose', 'Masking', 'Assignment', 'Allocation', 'Design', 'Observational design', 'Time perspective','Status') # for ordering on plot
 
 # make table of estimates and names, and add reference groups
-# some results put in order of high to low
+# note required is at variable level but is put next to each category
 table_names_clintrials = read.table(sep='!', header=TRUE, stringsAsFactors = FALSE, text='
 group!term!label!reference
 continuous!date!Trend per 5 years!FALSE
@@ -136,14 +218,12 @@ continuous!n_arms!Double the number of arms!FALSE
 Gender!genderMale!Males!FALSE
 Gender!genderFemale!Females!FALSE
 Gender!genderAll!All!TRUE
-Maximum age limit!age_limit_maxOver 18!Over 18!FALSE
-Maximum age limit!age_limit_maxExactly 18!Exactly 18!FALSE
+Maximum age limit!age_limit_max18 or over!18+!FALSE
 Maximum age limit!age_limit_maxUnder 18!Under 18!FALSE
 Maximum age limit!age_limit_maxNo limit!No limit!TRUE
 Maximum age limit!age_limit_maxNot stated!Not stated!FALSE
 Maximum age limit!age_limit_maxMissing!Missing!FALSE
-Minimum age limit!age_limit_minOver 18!Over 18!FALSE
-Minimum age limit!age_limit_minExactly 18!Exactly 18!FALSE
+Minimum age limit!age_limit_min18 or over!18+!FALSE
 Minimum age limit!age_limit_minUnder 18!Under 18!FALSE
 Minimum age limit!age_limit_minNo limit!No limit!TRUE
 Minimum age limit!age_limit_minNot stated!Not stated!FALSE
@@ -200,11 +280,11 @@ Observational design!study_design_observationalEcologic or Community!Ecologic or
 Observational design!study_design_observationalFamily-Based!Family-Based!FALSE
 Observational design!study_design_observationalOther!Other!FALSE
 Observational design!study_design_observationalMissing!Missing!FALSE
-Observational time!study_design_timeCross-Sectional!Cross-Sectional!FALSE
-Observational time!study_design_timeProspective!Prospective!TRUE
-Observational time!study_design_timeOther!Other!FALSE
-Observational time!study_design_timeRetrospective!Retrospective!FALSE
-Observational time!study_design_timeMissing!Missing!FALSE
+Time perspective!study_design_timeCross-Sectional!Cross-Sectional!FALSE
+Time perspective!study_design_timeProspective!Prospective!TRUE
+Time perspective!study_design_timeOther!Other!FALSE
+Time perspective!study_design_timeRetrospective!Retrospective!FALSE
+Time perspective!study_design_timeMissing!Missing!FALSE
 Masking!maskingMissing!Missing!FALSE
 Masking!maskingQuadruple!Quadruple!FALSE
 Masking!maskingTriple!Triple!FALSE
@@ -221,6 +301,8 @@ Allocation!allocationNon-Randomized!Non-Randomized!FALSE
 Allocation!allocationRandomized!Randomized!TRUE
 Allocation!allocationMissing!Missing!FALSE
 Allocation!allocationN/A!Not applicable!FALSE
+Design!longitudinalTRUE!Longitudinal!FALSE
+Design!adaptive_trialTRUE!Adaptive/platform trial!FALSE
 Status!statusActive, not recruiting!Active, not recruiting!FALSE
 Status!statusTerminated!Terminated!FALSE
 Status!statusSuspended!Suspended!FALSE
@@ -231,5 +313,5 @@ Status!statusCompleted!Completed!TRUE
   mutate(group_number = as.numeric(factor(group, levels=g_order))) # add number for ordering
 
 ## save
-save(table_names_anzctr, table_names_clintrials, file='data/labels.RData')
+save(mandatory_anzctr, table_names_anzctr, mandatory_clintrials, table_names_clintrials, file='data/labels.RData')
 

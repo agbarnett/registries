@@ -148,25 +148,27 @@ roundz = function(x, digits){
 }
 
 ## create nice plot of sample size regression model estimates
+# plot target and actual in same plot
 plot_function = function(indata, 
                          which_outcome, 
                          table_names, 
+                         lsize = 13, # size of labels text
                          label_side = NULL, # side for group labels
-                         ljust=0.5, # justfication of legend at top
-                         x_limits=1:3, # major ticks for x-axis
+                         ljust = 0.5, # justfication of legend at top
+                         x_limits = 1:3, # major ticks for x-axis
                          minor_breaks=0 # minor ticks for x-axis
                          ){
-   # get estimates
-   this_ests = filter(indata, outcome == which_outcome) # from elastic net models
-   # remove status from labels if target
-   if(which_outcome=='target'){table_names = filter(table_names, group != 'Status')}
-   # add estimates to labels
-   add_ests = full_join(table_names, this_ests, by='term') %>%
+   # add estimates (from elastic net models) to labels
+   add_ests = full_join(table_names, indata, by='term') %>%
       filter(!term == '(Intercept)',
              !is.na(estimate)|reference==TRUE)  %>% # remove missing estimates, but keep reference categories
       select(-p.value, -std.error, -statistic) %>% # tidy up
       mutate(estimate = ifelse(reference==TRUE, 0, estimate), # for reference groups
-             study_type = ifelse(reference==TRUE, 'Reference group', study_type)) # just to avoid missing
+             outcome_num = case_when( # outcome number for colouring and ordering in legend
+                outcome == 'target' ~ 1,
+                outcome == 'actual' ~ 2,
+                is.na(outcome) ~ 3
+             ))
    # only include groups that were in the final model
    add_ests  =group_by(add_ests, group_number) %>%
       summarise(any_non_ref = min(reference)) %>%
@@ -219,34 +221,38 @@ plot_function = function(indata,
          conf.low=0, conf.high=0, reference=1,
          group = ifelse(group=='continuous', 'Continuous variables', group)) # 
    dotted.lines = group_labels$maxx + 0.5 # dotted lines to split groups
-   # dodge observational to avoid overlap of CIs with interventional
+   # dodge target to avoid overlap of CIs with actual
+   gap = 0.25
    all_res = mutate(all_res,
-                    xaxis = ifelse(study_type=='Observational', xaxis+0.2, xaxis))
+                    xaxis = ifelse(outcome_num==1, xaxis+gap, xaxis))
    # text for axis labels
    text1 = data.frame(xaxis=1, estimate=1, conf.low=0, conf.high=0, reference=1, label='Increase')
    text2 = data.frame(xaxis=1, estimate=1, conf.low=0, conf.high=0, reference=1, label='Decrease')
    # plot
-   star.wars.relative = ggplot(data=all_res, aes(x=xaxis, y=estimate, ymin=conf.low, ymax=conf.high, shape=factor(reference), col=factor(study_type)))+
+   star.wars.relative = ggplot(data=all_res, aes(x=xaxis, y=estimate, ymin=conf.low, ymax=conf.high, shape=factor(reference), col=factor(outcome_num)))+
       geom_hline(lty=2, yintercept=0)+ # reference line at zero
       geom_point(size=2, shape=19)+
       geom_errorbar(width=0, size=1.02)+
-      scale_color_manual(NULL, values=c('goldenrod1','dodgerblue','grey'))+
+      scale_color_manual('Sample size:', values=c('dodgerblue','goldenrod1','grey'), labels=c('Target','Actual','Reference'))+
       geom_vline(lty=3, xintercept=dotted.lines)+ # breaks between groups of variables
       geom_text(data=text1, aes(x=xaxis, y=estimate, label =label), adj=-0.1, vjust=1, col=grey(0.5))+
       geom_text(data=text2, aes(x=xaxis, y=estimate, label =label), adj=1.1, vjust=1, col=grey(0.5))+
       geom_text(data=group_labels, aes(x=meanx, y=estimate, label =group), adj=1, col=grey(0.5))+
-      scale_x_continuous(expand=c(0.01,0.01), breaks=1:length(axis_labels), labels=axis_labels, limits=c(0.5, length(axis_labels)+0.2))+ # plus 0.2 for dodge
+      scale_x_continuous(expand=c(0.01,0.01), breaks=1:length(axis_labels), labels=axis_labels, limits=c(0.5, length(axis_labels)+gap))+ # plus 0.2 for dodge
       scale_y_continuous(breaks=x_limits, minor_breaks =minor_breaks )+ # 
       ylab('Percent change in sample size')+
       xlab('')+
       theme_bw()+
-      ggtitle(" ")+ # create room for legend
-      theme(#legend.position = 'top',
-         legend.position = c(0, 1), # (x,y) position = 'top' not working
-         legend.justification = c(ljust, -0.2), # further help getting it outside plot area (minus makes y bit higher)
-         legend.direction = 'horizontal',
-         legend.margin = unit(0,"lines"),
-         text=element_text(size=13), 
+      theme(
+         legend.position = 'top',
+         legend.box.spacing = unit(0, 'mm'), # reduce space between plot and legend
+         legend.box.margin	= margin(t=0, r=0, b=0, l=0), # reduce space around legend
+         legend.margin = margin(t=0, r=0, b=0, l=0, unit='mm'), # reduce space around legend
+         legend.title=element_text(size=10),
+         legend.text=element_text(size=10),
+         plot.margin = margin(t=0, r=1, b=1, l=0, unit='mm'), # small space around plot
+         text = element_text(size=12), 
+         axis.text.y = element_text(size=lsize), # size of labels, had to shorten for very large plots
          panel.grid.major.y = element_blank(),
          panel.grid.minor.y = element_blank())+
       coord_flip() 

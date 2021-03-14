@@ -1,6 +1,6 @@
 # 2_prep_clintrials.R
 # Prepare data for regression models (used by 3_basic_table.R, 2_elasticnet_model_samplesize_clintrial.R)
-# January 2021
+# February 2021
 
 ## Prepare data for regression model
 # change missing to a category
@@ -15,16 +15,16 @@ for.model = mutate(studies,
                    age_limit_max = case_when(
                      age_max_type == 'No limit' ~ 'No limit',
                      age_max_type == 'Restricted' & age_max <18  ~ 'Under 18',
-                     age_max_type == 'Restricted' & age_max ==18  ~ 'Exactly 18',
-                     age_max_type == 'Restricted' & age_max >18  ~ 'Over 18'
+                     age_max_type == 'Restricted' & age_max >=18  ~ '18 or over'
                    ),
                    # min age
                    age_limit_min = case_when(
                      age_min_type == 'No limit' ~ 'No limit',
                      age_min_type == 'Restricted' & age_min <18  ~ 'Under 18',
-                     age_min_type == 'Restricted' & age_min ==18  ~ 'Exactly 18',
-                     age_min_type == 'Restricted' & age_min >18  ~ 'Over 18'
+                     age_min_type == 'Restricted' & age_min >=18  ~ '18 or over'
                    ),
+                   # combine platform and adaptive trials (small numbers)
+                   adaptive_trial = ifelse(platform_trial==TRUE, TRUE, adaptive_trial),
                    # add categories for missing
                    gender = ifelse(is.na(gender), 'Missing', gender),
                    volunteers = ifelse(is.na(volunteers), 'Missing', volunteers),
@@ -33,9 +33,9 @@ for.model = mutate(studies,
                    allocation = ifelse(is.na(allocation), 'Missing', allocation),
                    assignment = ifelse(is.na(assignment), 'Missing', assignment),
                    lead_sponsor_class = ifelse(is.na(lead_sponsor_class), 'Missing', lead_sponsor_class),
-                   phase = ifelse(is.na(phase), 'Missing', phase),
-                   study_design_time = ifelse(is.na(study_design_time), 'Missing', study_design_time),
-                   study_design_observational = ifelse(is.na(study_design_observational), 'Missing', study_design_observational)
+                   phase = ifelse(is.na(phase), 'Missing', phase)
+#                   study_design_time = ifelse(is.na(study_design_time), 'Missing', study_design_time),
+#                   study_design_observational = ifelse(is.na(study_design_observational), 'Missing', study_design_observational)
 ) %>%
   #filter(!is.na(age_limit_max),
   #       !is.na(age_limit_min)) %>% # exclude few missing new age variable - not needed
@@ -56,7 +56,8 @@ for.model = mutate(studies,
     ),
     status = relevel(factor(status), ref='Completed'),
     age_limit_max = relevel(factor(age_limit_max), ref='No limit'),
-    age_limit_min = relevel(factor(age_limit_min), ref='No limit'),
-    study_design_observational = relevel(factor(study_design_observational), ref='Cohort'),
-    study_design_time = relevel(factor(study_design_time), ref='Prospective')) %>%
+    age_limit_min = relevel(factor(age_limit_min), ref='No limit')
+    #study_design_observational = relevel(factor(study_design_observational), ref='Cohort'),
+    #study_design_time = relevel(factor(study_design_time), ref='Prospective')
+    ) %>%
   select(-age_min_type, -age_min, -age_max_type, -age_max)

@@ -239,7 +239,8 @@ to_plot = filter(studies,
 #filter(to_plot, diff< log(0.1)) %>% select(samplesize_target, samplesize_actual) # where sample was 10% of target
 # stats
 stats = summarise(to_plot, mean=mean(diff), sd=sd(diff)) %>%
-  mutate(lower = mean - z*sd, # limits of agreement
+  mutate(z = qnorm(0.975),
+         lower = mean - z*sd, # limits of agreement
          upper = mean + z*sd)
 # label log axis
 x.labels = c(1,5,50,500,5000,50000)
@@ -345,10 +346,16 @@ add_outliers = select(to_plot, aver, diff) %>%
   upper = est_mean + (z*est_sigma)
 ) %>%
 filter(diff > upper | diff < lower)
+# axis
+x.labels = c(1,5,50,500,5000,100000)#,1000000)
+x_labs = str_remove_all(format(x.labels, big.mark=',', scientific = FALSE), ' ')
+x.ticks = log(x.labels+1)
+y.labels = c(0.01,0.1,0.25,1,4,10,40) # relative (like a risk ratio); symmetric
+y.ticks = log(y.labels)
 # to here, add outlier studies; dotted line at 1
 to_plot_diff = filter(res, str_detect(string=var, pattern='diff')) %>%
   mutate(xaxis= preds_av)
-plot = ggplot(data=to_plot_diff, aes(x=xaxis, y=mean, ymin=lower, ymax=upper))+
+bplot = ggplot(data=to_plot_diff, aes(x=xaxis, y=mean, ymin=lower, ymax=upper))+
   geom_ribbon(alpha=0.2)+
   geom_line(size=1.05)+
   geom_point(data=add_outliers, aes(x=aver, y=diff))+
@@ -357,7 +364,11 @@ plot = ggplot(data=to_plot_diff, aes(x=xaxis, y=mean, ymin=lower, ymax=upper))+
   xlab('Average (log scale)')+
   ylab('Relative difference (Actual minus Target)')+
   g.theme
-plot
+bplot
+jpeg('figures/bland_altman_quadratic.jpg', width=5, height=5, units='in', res=300)
+print(bplot)
+dev.off()
+
 ```
 
 The averaged difference on the scale of relative was estimated as `r roundz(exp(mean.diff$mean),2)` with a 95% credible interval of `r roundz(exp(mean.diff$lower),2)` to `r roundz(exp(mean.diff$upper),2)`. So on average, sample sizes are `r roundz(100*(exp(mean.diff$mean)-1),2)`% smaller than their target. However, the mean difference is larger for smaller studies, and for larger studies the mean difference is close to 1.

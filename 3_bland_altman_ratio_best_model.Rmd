@@ -1,0 +1,60 @@
+---
+title: "Deviance information criterion for the fractional polynomial models used to model the Bland--Altman limits of agreement"
+output: pdf_document
+geometry: margin=2cm
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message=FALSE, error=FALSE, comment='', dpi=400)
+options(width=1000) # Wide pages
+options(scipen=999) # avoid scientific presentation
+
+library(dplyr)
+library(ggplot2)
+library(stringr)
+powers = c(-2, -1, -0.5, 0, 0.5, 1, 2, 3) # fractional polynomials
+
+# move to where results are on lyra
+here = getwd()
+setwd("//hpc-fs/barnetta/anzctr/results")
+to_load = dir()
+index = str_detect(to_load, '[0-9]')
+to_load = to_load[index] # just the DIC results
+all_DIC = NULL
+for (f in to_load){ # get the DIC results
+  load(f)
+  # from t-distribution or normal
+  t = str_detect(f, pattern='\\.t\\.')
+  DIC = mutate(DIC, t=t)
+  all_DIC = bind_rows(all_DIC, DIC)
+}
+setwd(here)
+# find the smallest
+small = arrange(all_DIC, t, -DIC) %>%
+  slice(3)
+small
+group_by(all_DIC, t) %>% summarise(mean = mean(dic))
+```
+
+
+```{r, fig.width=6, fig.height=6}
+# plot
+all_DIC = mutate(all_DIC, 
+                 x.number=as.numeric(factor(power.mean)), # create numbers without breaks
+                 y.number=as.numeric(factor(power.variance)),
+                 dic_round = round(dic))
+# filter data to plot t-distribution or gaussian
+gplot = ggplot(data=filter(all_DIC, t==TRUE), aes(x=x.number, y=y.number, fill=dic, label=dic_round))+
+  geom_tile()+
+  geom_text(size=3.5)+
+  xlab('Fractional polynomial for mean')+
+  ylab('Fractional polynomial for variance')+
+  scale_x_continuous(breaks=1:8, labels=powers, expand=c(0,0))+
+  scale_y_continuous(breaks=1:8, labels=powers, expand=c(0,0))+
+  scale_fill_gradient('DIC', low='dark red', high='grey')+
+  theme_bw()+
+  theme(panel.grid.minor = element_blank())
+gplot
+```
+
+The best model is for a fractional polynomial power of zero for both the mean and variance. Hence the association in the limits of agreement and average sample size is estimated to be linear. 

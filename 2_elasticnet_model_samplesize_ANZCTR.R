@@ -13,47 +13,42 @@ library(olsrr) # for VIF
 
 ## colinear variables from trial and error
 colinear = read.table(header=TRUE, sep=',', stringsAsFactors=FALSE, text='
-stype,outcome,variable,colinear_with
-Interventional,target,phaseNot Applicable,missing masking
-Interventional,target,age_limit_minExactly 18,age_limit_min Over 18
-Interventional,actual,age_limit_minExactly 18,age_limit_min Over 18
+outcome,variable,colinear_with
+target,phaseNot Applicable,missing masking
+target,age_limit_minExactly 18,age_limit_min Over 18
+actual,phaseNot Applicable,missing masking
+actual,age_limit_minExactly 18,age_limit_min Over 18
 ')
 
 # get the registry data
 load('data/AnalysisReady.RData') # from 0_read_data_anzctr.R 
 source('2_prep_ANZCTR.R') # prepare data for regression model
 
-## split by: 1) observational or not, 2) actual or target
+## split by: 1) actual or target
 all_ests = variables_excluded = numbers = vars = xval = NULL
 standard_models = list()
-types = c('Observational','Interventional')
 otypes = c('target','actual') # outcome (target or actual sample size)
 for (otype in otypes){
-for (stype in types){
-  cat(otype, ', ', stype,'\n', sep='')
-  mtype = paste(otype, stype) # combined
+  cat(otype, '\n', sep='')
+  mtype = paste(otype) # combined
   set.seed(30991199) # for x-validation
   
   ## make design matrix
   # not included: ethics variables (not clear causal pathway), ccode2 (too detailed)
   vars_to_include = c('date','gender','age_limit_max','age_limit_min',
-                      'control','endpoint','n_primary','n_secondary','ccode1','n_funding','provisional')
+                      'control','n_primary','n_secondary','ccode1','n_funding','volunteers',
+                      'allocation','phase','endpoint','purpose','masking','assignment','intervention_code')
   if(otype == 'actual'){vars_to_include = c(vars_to_include, 'study_status')} # just for actual sample size
-  if(stype == 'Interventional'){
-    vars_to_include = c(vars_to_include, 'phase','purpose','masking','assignment','intervention_code') # add trial details ****
-    this_vars = data.frame(stype = 'Interventional', variables = vars_to_include)
-    vars = bind_rows(vars, this_vars) # for variable summary table
-  }
-  if(stype == 'Observational'){
-    this_vars = data.frame(stype = 'Observational', variables = vars_to_include) # no additional variables for observational data
-    vars = bind_rows(vars, this_vars) # for variable summary table
-  } 
+  vars_to_include = c(vars_to_include) # add variables for interventional studies
+  this_vars = data.frame(variables = vars_to_include)
+  vars = bind_rows(vars, this_vars) # for variable summary table
 
+  
   # formula without intercept:
   formula = paste('log(samplesize_target) ~ -1 +', paste(vars_to_include, collapse = '+'))
   
-  # just one study type (observational or interventional); and remove missing outcome
-  this_data = filter(for.model, study_type == stype)
+  # remove missing outcome
+  this_data = for.model
   if(otype=='target'){
     n_missing_outcome = sum(is.na(this_data$samplesize_target))
     this_data = filter(this_data, 
@@ -69,9 +64,9 @@ for (stype in types){
 X = model.matrix(as.formula(formula), data=this_data)
 
 # option to remove colinear
-to_remove = filter(colinear, stype==stype, outcome==otype)
+to_remove = filter(colinear, outcome==otype)
 if(nrow(to_remove) > 0){
-  drop = colnames(X) %in% to_remove$variable  # because of high VIF; NA phase is perfectly correlated with Observational study
+  drop = colnames(X) %in% to_remove$variable  # because of high VIF
   X = X[, !drop]
 }
 
@@ -81,34 +76,32 @@ if(otype=='actual'){y = log(this_data$samplesize_actual+1)}
 
 # run model
 enet_model = glmnet(y=y, x=X, alpha=0.95)
-plot(enet_model, main=paste(stype, ', ', otype, sep=''))
+plot(enet_model, main=otype)
 
 # x-validation to find best cut-off
 cv_enet_xval = cv.glmnet(y=y, x=X, alpha=0.95)
-plot(cv_enet_xval, main=paste(stype, ', ', otype, sep=''))
+plot(cv_enet_xval, main=otype)
 beta = coef(cv_enet_xval, s='lambda.1se')
 # store x-validation results for later plotting:
 cv_ests = tidy(cv_enet_xval) %>%  
   mutate(
     lambda.1se = cv_enet_xval$lambda.1se, # add lambda min and 1SE
     lambda.min = cv_enet_xval$lambda.min,
-    outcome = otype, # add outcome
-    study_type = stype) # add model type
+    outcome = otype) # add outcome
 xval = bind_rows(xval, cv_ests)
 
 ## re-run standard model for best coefficients with confidence intervals ##
 update_vars_to_include = row.names(beta)[which(beta!=0)]
 X.dash = X[, colnames(X) %in% update_vars_to_include]
 vars_excluded = colnames(X)[colnames(X) %in% update_vars_to_include == FALSE] # variables that were excluded by elastic net
-vars_excluded = data.frame(study_type=stype, outcome=otype, variables=vars_excluded)
+vars_excluded = data.frame(outcome=otype, variables=vars_excluded)
 variables_excluded = bind_rows(variables_excluded, vars_excluded) # concatenate
 if(ncol(X.dash)>0){ # in any variables remaining
 standard_model = glm(y~X.dash)
 # tidy estimates
 standard_model_ests= broom::tidy(standard_model, conf.int=TRUE) %>%
   mutate(term = str_remove(string=term, pattern='X.dash'),
-         outcome = otype, # add outcome
-         study_type = stype) # add model type
+         outcome = otype) # add outcome
 all_ests = bind_rows(all_ests, standard_model_ests) # concatenate nicely formatted estimates
 }
 if(ncol(X.dash)==0){ # in no variables remaining
@@ -127,19 +120,17 @@ compare = full_join(standard_model_ests, enet_beta, by='term') %>%
 # Bland-Altman plot (standard estimates are slightly bigger as expected because of shrinkage)
 cplot = ggplot(data=compare, aes(x=av, y=diff, label=term))+
   geom_point()+
-  ggtitle(stype)+
   xlab('Average')+
   ylab('Difference (elastic net minus standard)')+
   geom_label(size=2)+
   theme_bw()
-outfile = paste('figures/bland_altman_enet_standard_clintrials_', stype, '.jpg', sep='')
+outfile = paste('figures/bland_altman_enet_standard_clintrials.jpg', sep='')
 jpeg(outfile, width=5, height=4.5, units='in', res=300)
 print(cplot)
 dev.off()
 
 # basic numbers
 numbers_frame = data.frame(outcome = otype,
-                           study_type = stype,
                            n_missing_outcome = n_missing_outcome,
                            n_model = nrow(this_data))
 numbers = bind_rows(numbers, numbers_frame)
@@ -152,22 +143,11 @@ if(is.null(standard_model) == FALSE){
   cat('Any VIF?' , any(VIF>5), '\n')
 }
 
-} # end of study type loop
 } # end of outcome type loop
 
 # save processed data and mode estimates
 which_data = 'anzctr'
 save(which_data, numbers, standard_models, all_ests, variables_excluded, vif, colinear, xval, file='results/ANZCTR_sample_size.RData')
-
-# compare interventional/observational estimates
-to_plot = filter(all_ests, 
-                 !str_detect(string=term, pattern='Intercept')) # remove intercept from plot
-compare_plot = ggplot(to_plot, aes(x=term, y=estimate, col=factor(study_type)))+
-  geom_point()+
-  xlab('')+
-  coord_flip()+
-  theme(legend.position = 'top')
-compare_plot
 
 ## save variable list and which were log-transformed
 # list of log-transformed variables

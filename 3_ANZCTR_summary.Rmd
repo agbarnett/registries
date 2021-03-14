@@ -211,29 +211,6 @@ There is a strong digit preference in the age limit with spikes in multiples of 
 
 # Study characteristics
 
-## Study type
-
-```{r, results='asis'}
-with(studies, freq(study_type, cumul = FALSE, report.nas =TRUE, order='freq'))
-```
-
-#### Study type over time
-
-```{r}
-to_plot = mutate(studies,
-                 year = as.numeric(format(submitted, '%Y'))) %>% # make year
-  group_by(year, study_type) %>%
-  tally()
-gplot = ggplot(data=to_plot, aes(x=year, y=n, fill=study_type))+
-  geom_bar(stat='identity')+
-  scale_fill_manual(NULL, values=c('darkseagreen3','darkgoldenrod2'))+
-  theme_bw()+
-  ylab('Number of studies')+
-  xlab('Year submitted')+
-  theme(legend.position = c(0.15,0.8))
-gplot
-```
-
 ## Purpose
 
 ```{r, results='asis'}
@@ -326,12 +303,6 @@ This field is free text and so relies on what researchers write. Some categories
 
 ```{r, results='asis'}
 with(studies, freq(study_status, cumul = FALSE, report.nas =FALSE, order='freq')) 
-```
-
-## Provisional
-
-```{r, results='asis'}
-with(studies, freq(provisional, cumul = FALSE, report.nas =FALSE, order='freq')) 
 ```
 
 ## Study-related publication listed
@@ -471,35 +442,22 @@ load('data/labels.RData') # from 0_labels.R
 We used elastic net. 
 Selected parsimonious model as minimum cross-validated error plus 1 standard error.
 Checked the final model for colinearity using the variance-inflation factor (VIF).
-There were variables that were colinear with study type (Observational/Interventional) and this was part of the reason for running these models separately.
 
 We log-transformed (base e) the sample size because of a very strong positive skew.
 The plot shows the estimated mean and 95% confidence interval on the untransformed scale.
 
-### Plot of percent differences for the actual sample size
+### Plot of percent differences for the sample size
 
 ```{r, fig.width=8, fig.height=9.5}
-to_plot = plot_function(indata=all_ests, which_outcome='actual', table_names=table_names_anzctr)
+to_plot = plot_function(indata=all_ests, 
+                        ljust=0.35, # move legend at top
+                        lsize=9, # labels have to be smaller
+                        table_names=table_names_anzctr,
+                        x_limits = seq(-100,300,100),
+                        minor_breaks = seq(-100,350,50))
 to_plot
 # export to tall-thin plot
 jpeg('figures/ANZCTR_sample_size_relative_actual.jpg', width=6.5, height=9.5, units='in', res=600)
-print(to_plot)
-invisible(dev.off())
-# for PLOS
-tiff('figures/Fig2.tif', width=6.5, height=8.75, units='in', res=600, family='Times New Roman', compression = 'lzw') # 
-print(to_plot)
-invisible(dev.off())
-```
-
-The number of studies was `r format(filter(numbers, outcome=='actual', study_type=='Observational')  %>% pull(n_model), big.mark=',')` for the observational data and `r format(filter(numbers, outcome=='actual', study_type=='Interventional')  %>% pull(n_model), big.mark=',')` for the interventional data.
-
-### Plot of relative differences for the target sample size
-
-```{r, fig.width=8, fig.height=9.5}
-to_plot = plot_function(indata=all_ests, which_outcome='target', table_names = table_names_anzctr)
-to_plot
-# export to tall-thin plot
-jpeg('figures/ANZCTR_sample_size_relative_target.jpg', width=6.5, height=9.5, units='in', res=600)
 print(to_plot)
 invisible(dev.off())
 # for PLOS
@@ -508,9 +466,7 @@ print(to_plot)
 invisible(dev.off())
 ```
 
-The number of studies was `r format(filter(numbers, outcome=='target', study_type=='Observational')  %>% pull(n_model), big.mark=',')` for the observational data and `r format(filter(numbers, outcome=='target', study_type=='Interventional')  %>% pull(n_model), big.mark=',')` for the interventional data.
-
-
+The number of studies was `r format(filter(numbers, outcome=='actual') %>% pull(n_model), big.mark=',')`.
 
 ### Check residuals from regression model
 
@@ -518,19 +474,12 @@ The number of studies was `r format(filter(numbers, outcome=='target', study_typ
 
 ```{r, fig.width=7, fig.height=3.5}
 otype = 'target'
-all_res = NULL
-for (model in c('Interventional','Observational')){ # get residuals for both types
-  model_comb = paste(otype, model, sep=' ')
-  res = data.frame(res = resid(standard_models[[model_comb]]))
-  frame = data.frame(model=model, res=res)
-  all_res = bind_rows(all_res, frame)
-}
-rplot = ggplot(all_res, aes(x=res))+
+  res = data.frame(res = resid(standard_models[[otype]]))
+rplot = ggplot(res, aes(x=res))+
   geom_histogram(fill='firebrick3')+
   g.theme+
   xlab('Residual (log-scale)')+
-  ylab('Count')+
-  facet_wrap(~model, scales='free_y')
+  ylab('Count')
 rplot
 # r-squared
 # rsq = cor(log2(for.model$samplesize_target), fitted(smodel)) ^2
@@ -542,19 +491,12 @@ The scales on the y-axes differ across panels.
 
 ```{r, fig.width=7, fig.height=3.5}
 otype = 'actual'
-all_res = NULL
-for (model in c('Interventional','Observational')){ # get residuals for both types
-  model_comb = paste(otype, model, sep=' ')
-  res = data.frame(res = resid(standard_models[[model_comb]]))
-  frame = data.frame(model=model, res=res)
-  all_res = bind_rows(all_res, frame)
-}
-rplot = ggplot(all_res, aes(x=res))+
+res = data.frame(res = resid(standard_models[[otype]]))
+rplot = ggplot(res, aes(x=res))+
   geom_histogram(fill='firebrick3')+
   g.theme+
   xlab('Residual (log-scale)')+
-  ylab('Count')+
-  facet_wrap(~model, scales='free_y')
+  ylab('Count')
 rplot
 ```
 

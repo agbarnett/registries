@@ -1,7 +1,7 @@
 # 0_read_data_clintrials_xml.R
 # read the clinicaltrials.gov data from XML files using the web
 # version reading XMLs from mega zip file, see https://www.clinicaltrials.gov/ct2/resources/download, from https://clinicaltrials.gov/AllPublicXML.zip 
-# January 2021
+# March 2021
 library(XML)
 library(dplyr)
 library(stringr)
@@ -17,7 +17,7 @@ folders = setdiff(folders, existing_data)
 N = length(folders)
 
 # loop through folders
-for (f in 1:N){
+for (f in 370:N){ # should be 1:N
   go = paste('U:/Research/Projects/ihbi/aushsi/aushsi_barnetta/meta.research/ANZCTR/data/AllAPIXML/', folders[f], sep='')
   setwd(go)
   xml_files = dir() # find all xml files in this folder (individual trials)
@@ -33,10 +33,18 @@ for (f in 1:N){
   ## extract individual parts of the XML
   # basics
   id = null_na(xml_data$id_info$nct_id)
+  brief_title = null_na(xml_data$brief_title)
+  study_type = null_na(xml_data$study_type)
+  if(is.na(study_type) == TRUE){
+    next # skip to next study
+  }
+  if(study_type %in% c("Observational [Patient Registry]","Observational")){
+    next # skip to next study
+  }
+  
   secondary_id = null_na(xml_data$id_info$secondary_id)
   if(length(secondary_id) > 1){stop("Multple secondary IDs")}
   status = null_na(xml_data$overall_status)
-  study_type = null_na(xml_data$study_type)
   # exclude the following
   exclude = pmax(status=='Withheld' , study_type == 'Expanded Access' , str_detect(string=tolower(secondary_id), 'actrn'), na.rm=TRUE)
   if(exclude == 1){
@@ -55,8 +63,12 @@ for (f in 1:N){
   #n_countries = length(countries)
   # study design
   phase = null_na(xml_data$phase, collapse=TRUE) # can be multiple so collapse into single result
-  study_design_observational = null_na(xml_data$study_design_info$observational_model)
-  study_design_time = null_na(xml_data$study_design_info$time_perspective)
+  #study_design_observational = null_na(xml_data$study_design_info$observational_model) # no longer using observational
+  #study_design_time = null_na(xml_data$study_design_info$time_perspective)
+  # text search for study design - could also search for pilot as a word
+  longitudinal = length(grep('longitudinal', xml_data$detailed_description$textblock, ignore.case = TRUE)) > 0
+  adaptive_trial = length(grep('adaptive clinical trial|adaptive trial|adaptive design', xml_data$detailed_description$textblock, ignore.case = TRUE)) > 0
+  platform_trial = length(grep('platform clinical trial|platform trial|platform design', xml_data$detailed_description$textblock, ignore.case = TRUE)) > 0
   # more study design
   allocation = null_na(xml_data$study_design_info$allocation)
   masking = null_na(xml_data$study_design_info$masking)
@@ -113,12 +125,12 @@ for (f in 1:N){
 
   # frame with one result per trial
   frame = data.frame(id = id, 
+                     brief_title = brief_title,
                      status = status,
                      submitted = submitted,
                      posted = posted, 
                      updated = updated, 
                      lead_sponsor_class = lead_sponsor_class,
-                     study_type = study_type, 
                      biological = biological,
                      behavioral = behavioral,
                      combination = combination,
@@ -137,8 +149,8 @@ for (f in 1:N){
                      allocation = allocation, 
                      assignment = assignment, 
                      phase = phase,
-                     study_design_observational = study_design_observational,
-                     study_design_time = study_design_time,
+                     #study_design_observational = study_design_observational, # no longer using observational
+                     #study_design_time = study_design_time,
                      sample_size = sample_size, 
                      sample_size_type = sample_size_type,
                      gender = gender, 
@@ -147,6 +159,9 @@ for (f in 1:N){
                      volunteers = volunteers,
                      n_primary = n_primary, 
                      n_secondary = n_secondary,
+                     longitudinal = longitudinal,
+                     adaptive_trial = adaptive_trial,
+                     platform_trial = platform_trial,
                      stringsAsFactors = FALSE)
   if(nrow(frame) > 1){stop('Multiple results per study')}
   # concatenate
@@ -157,10 +172,10 @@ for (f in 1:N){
   if(k%%100==0)(cat('Up to ',k,'.\r',sep=''))
 }
 
- # check of numbers
- if(is.null(excluded)==FALSE){diff = nrow(studies) + nrow(excluded) - length(xml_files)}
- if(is.null(excluded)==TRUE){diff = nrow(studies) - length(xml_files)}
- if(diff !=0) {cat('Numbers do not add up for', f, '.\n', sep='')}
+ # check of numbers, no longer needed, was all fine
+ #if(is.null(excluded)==FALSE){diff = nrow(studies) + nrow(excluded) - length(xml_files)}
+ #if(is.null(excluded)==TRUE){diff = nrow(studies) - length(xml_files)}
+ #if(diff !=0) {cat('Numbers do not add up for', f, '.\n', sep='')}
  
 # save 
 setwd(home)

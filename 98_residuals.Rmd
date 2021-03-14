@@ -18,19 +18,16 @@ These are the residuals for the models of target and actual sample size.
 
 ## clintrials.gov
 
-```{r, fig.width=6, fig.height=6}
+```{r, fig.width=6, fig.height=3}
 # get the results
 load('results/clintrials_sample_size.RData') # from 2_elasticnet_model_samplesize_clintrial.R
 #
 all_res = NULL
 for (outcome_type in c('target','actual')){ # get residuals for both 
-  for (model in c('Interventional','Observational')){ # get residuals for both 
-    mtype = paste(outcome_type, model)
-    mtype_nice = paste(stringr::str_to_sentence(outcome_type), model, sep=', ')
+    mtype = paste(outcome_type)
     res = data.frame(res = resid(standard_models[[mtype]]))
-    frame = data.frame(model=mtype_nice, res=res)
+    frame = data.frame(model=mtype, res=res)
     all_res = bind_rows(all_res, frame)
-  }
 }
 rplot = ggplot(all_res, aes(x=res))+
   geom_histogram(fill='firebrick3')+
@@ -48,19 +45,16 @@ The x- and y-axes vary by panel.
 
 ## ANZCTR
 
-```{r, fig.width=6, fig.height=6}
+```{r, fig.width=6, fig.height=3}
 # get the results
 load('results/ANZCTR_sample_size.RData')
 #
 all_res = NULL
 for (outcome_type in c('target','actual')){ # get residuals for both 
-  for (model in c('Interventional','Observational')){ # get residuals for both 
-    mtype = paste(outcome_type, model)
-    mtype_nice = paste(stringr::str_to_sentence(outcome_type), model, sep=', ')
+    mtype = paste(outcome_type)
     res = data.frame(res = resid(standard_models[[mtype]]))
-    frame = data.frame(model=mtype_nice, res=res)
+    frame = data.frame(model=mtype, res=res)
     all_res = bind_rows(all_res, frame)
-  }
 }
 rplot = ggplot(all_res, aes(x=res))+
   geom_histogram(fill='darkorange1')+
@@ -75,22 +69,16 @@ rplot
 
 ## Models of the target to actual sample size ratio
 
-```{r}
+```{r, fig.width=4, fig.height=4}
 # get the results
 load('results/sample_size_ratio.RData') # from 2_model_actual_target_ratio.R
 
-all_res = NULL
-for (model in c('Interventional','Observational')){ # get residuals for both 
-    res = data.frame(res = resid(standard_models[[model]]))
-    frame = data.frame(model=model, res=res)
-    all_res = bind_rows(all_res, frame)
-}
-rplot = ggplot(all_res, aes(x=res))+
+res = data.frame(res = resid(standard_models[["1se"]]))
+rplot = ggplot(res, aes(x=res))+
   geom_histogram(fill='seagreen3')+
   g.theme+
   xlab('Residual (log-scale)')+
-  ylab('Count')+
-  facet_wrap(~model, scales='free')
+  ylab('Count')
 rplot
 ```
 

@@ -79,7 +79,7 @@ make_diagram_clintrials()
 library(extrafont)
 loadfonts(device = "win")
 #jpeg('figures/consort_plot.jpg', width=7, height=5, units='in', res=300)
-tiff('figures/Fig1.tif', width=2000, height=1400, units='px', res=300, family='Times New Roman', compression = 'lzw') # for PLOS
+tiff('figures/Fig_S3.tif', width=2000, height=1400, units='px', res=300, family='Times New Roman', compression = 'lzw') # for PLOS
 layout(mat=t(1:2))
 make_diagram_anzctr()
 make_diagram_clintrials()

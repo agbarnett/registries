@@ -29,8 +29,7 @@ colinear = mutate(colinear,
   colinear_with = str_replace_all(string=colinear_with, pattern='assignment', replacement=' assignment = '),
   variable = str_replace_all(string=variable, pattern='_', replacement=' '),
   colinear_with = str_replace_all(string=colinear_with, pattern='_', replacement=' ')) %>%
-  rename('Study design' = 'stype',
-         'Sample size' = 'outcome',
+  rename('Sample size' = 'outcome',
          'Variable removed' = 'variable',
          'Was colinear with' = 'colinear_with')
 #
