@@ -1,0 +1,22 @@
+---
+title: "Supplement Figure 3: Flow diagram of the number of studies included and excluded"
+geometry: margin=2cm
+output: pdf_document
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message=FALSE, error=FALSE, comment='', dpi=400)
+library(dplyr)
+library(ggplot2)
+
+# create the diagram
+source('3_plot_excluded.R')
+```
+
+```{r, fig.width=9, fig.height=7}
+layout(mat=t(1:2))
+make_diagram_anzctr()
+make_diagram_clintrials()
+```
+
+The numbers available for the actual-to-target ratio analysis are smaller because studies had to provided data for both the actual and sample size.

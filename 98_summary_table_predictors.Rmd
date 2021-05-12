@@ -1,5 +1,5 @@
 ---
-title: "Tables of predictor variables in the two trial registries"
+title: "Supplement Table 1: Predictor variables in the two trial registries"
 output: pdf_document
 geometry: margin=2cm
 ---

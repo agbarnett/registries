@@ -1,0 +1,105 @@
+---
+title: "Deviance information criterion for the fractional polynomial models used to model the Bland--Altman limits of agreement"
+output: pdf_document
+geometry: margin=2cm
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message=FALSE, error=FALSE, comment='', dpi=400)
+options(width=1000) # Wide pages
+options(scipen=999) # avoid scientific presentation
+
+library(dplyr)
+library(ggplot2)
+library(stringr)
+powers = c(-2, -1, -0.5, 0, 0.5, 1, 2, 3) # fractional polynomials
+
+# move to where results are on lyra
+here = getwd()
+setwd("//hpc-fs/barnetta/anzctr/results")
+to_load = dir()
+index1 = str_detect(to_load, '[0-9]')
+index2 = str_detect(to_load, '\\.t\\.')
+index3 = str_detect(to_load, 'ANZCTR|clintrials')
+to_load = to_load[index1&index2&index3] # just the DIC results
+# with and without clintrials
+all_DIC = NULL
+index = str_detect(to_load, 'clintrials')
+for (clintrials in c(0,1)){ # loop through both databases
+  if(clintrials==0){
+    database = 'ANZCTR'
+    to_load_db = to_load[!index]
+  }
+  if(clintrials==1){
+    database = 'clintrials'
+    to_load_db = to_load[index]
+  }
+  for (f in to_load_db){ # get the DIC results
+    load(f)
+    # from t-distribution or normal
+    t = str_detect(f, pattern='\\.t\\.')
+    DIC = mutate(DIC, t=t, database=database)
+    all_DIC = bind_rows(all_DIC, DIC)
+  }
+}
+setwd(here)
+# find the smallest
+small = group_by(all_DIC, database) %>%
+  arrange(database, t, dic) %>%
+  slice(1) %>%
+  ungroup()
+small
+group_by(all_DIC, database, t) %>% summarise(mean = mean(dic))
+```
+
+## ANZCTR
+
+```{r, fig.width=6, fig.height=6}
+# plot
+DIC_to_plot = filter(all_DIC, database=='ANZCTR') %>%
+          mutate(x.number=as.numeric(factor(power.mean)), # create numbers without breaks
+                 y.number=as.numeric(factor(power.variance)),
+                 dic_round = round(dic))
+# filter data to plot t-distribution or gaussian
+gplot = ggplot(data=filter(DIC_to_plot, t==TRUE), aes(x=x.number, y=y.number, fill=dic, label=dic_round))+
+  geom_tile()+
+  geom_text(size=3.5, aes(col=dic))+
+  xlab('Fractional polynomial for mean')+
+  ylab('Fractional polynomial for variance')+
+  scale_x_continuous(breaks=1:8, labels=powers, expand=c(0,0))+
+  scale_y_continuous(breaks=1:8, labels=powers, expand=c(0,0))+
+  scale_colour_gradient('DIC', low='white', high='black', guide=FALSE)+ # change text colour
+  scale_fill_gradient('DIC', low='dark blue', high='grey')+
+  theme_bw()+
+  theme(panel.grid.minor = element_blank())
+gplot
+```
+
+The best model is for a fractional polynomial power --0.5 for the mean and --1 for the variance. 
+
+## clinicaltrials.gov
+
+```{r, fig.width=6, fig.height=6}
+# plot
+DIC_to_plot = filter(all_DIC, database=='clintrials') %>%
+          mutate(x.number=as.numeric(factor(power.mean)), # create numbers without breaks
+                 y.number=as.numeric(factor(power.variance)),
+                 dic_round = round(dic))
+# filter data to plot t-distribution or gaussian
+gplot = ggplot(data=filter(DIC_to_plot, t==TRUE), aes(x=x.number, y=y.number, fill=dic, label=dic_round))+
+  geom_tile()+
+  geom_text(size=3.5, aes(col=dic))+
+  xlab('Fractional polynomial for mean')+
+  ylab('Fractional polynomial for variance')+
+  scale_x_continuous(breaks=1:8, labels=powers, expand=c(0,0))+
+  scale_y_continuous(breaks=1:8, labels=powers, expand=c(0,0))+
+  scale_colour_gradient('DIC', low='white', high='black', guide=FALSE)+ # change text colour
+  scale_fill_gradient('DIC', low='dark blue', high='grey')+
+  theme_bw()+
+  theme(panel.grid.minor = element_blank())
+gplot
+```
+
+The best model is for a fractional polynomial power --2 for the mean and --0.5 for the variance. 
+
+

@@ -1,7 +1,7 @@
 # 0_labels.R
 # labels that help with the plots of the regression models
 # useful page: https://prsinfo.clinicaltrials.gov/definitions.html
-# February 2021
+# April 2021
 library(dplyr)
 
 ## Section 1: ANZCTR labels ##
@@ -215,6 +215,7 @@ continuous!n_primary!Double the number of primary outcomes!FALSE
 continuous!n_secondary!Double the number of secondary outcomes!FALSE
 continuous!n_condition!Double the number of conditions!FALSE
 continuous!n_arms!Double the number of arms!FALSE
+continuous!samplesize_target!Double target sample size!FALSE
 Gender!genderMale!Males!FALSE
 Gender!genderFemale!Females!FALSE
 Gender!genderAll!All!TRUE
@@ -255,7 +256,7 @@ Phase!phaseN/A!Not Applicable!FALSE
 Phase!phaseNot Applicable!Not Applicable!FALSE
 Phase!phaseMissing!Missing!FALSE
 Sponsor!lead_sponsor_classOTHER!Other!TRUE
-Sponsor!lead_sponsor_classU.S. Fed!U.S. Fed!FALSE
+Sponsor!lead_sponsor_classU.S. Fed!US Federal agencies!FALSE
 Sponsor!lead_sponsor_classIndustry!Industry!FALSE
 Sponsor!lead_sponsor_classOTHER_GOV!Other government!FALSE
 Sponsor!lead_sponsor_classNETWORK!Network!FALSE
@@ -306,6 +307,7 @@ Design!adaptive_trialTRUE!Adaptive/platform trial!FALSE
 Status!statusActive, not recruiting!Active, not recruiting!FALSE
 Status!statusTerminated!Terminated!FALSE
 Status!statusSuspended!Suspended!FALSE
+Status!statusStopped early!Stopped early!FALSE
 Status!statusUnknown status!Unknown!FALSE
 Status!statusWithdrawn!Withdrawn!FALSE
 Status!statusCompleted!Completed!TRUE

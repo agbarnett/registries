@@ -1,0 +1,46 @@
+---
+title: "Supplement table 2: Percent changes (and 95% condidence intervals) in the ratio of the target to actual sample size."
+output: pdf_document
+---
+  
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message=FALSE, error=FALSE, comment='', dpi=400)
+options(width=1000) # Wide pages
+options(scipen=999) # avoid scientific presentation
+
+library(stringr)
+library(flextable)
+library(dplyr)
+
+source('3_plot_actual_target_ratio_model.R') # to get results
+```
+
+\thispagestyle{empty} 
+
+
+```{r}
+# confusing, but outcome target is actually the database
+make_table = filter(all_ests, !str_detect(term, 'Intercept')) %>%  
+  mutate(Database = ifelse(outcome=='target', 'ANZCTR', 'clinicaltrials.gov'),
+    PC = exp(estimate),
+    conf.low = exp(conf.low),
+    conf.high = exp(conf.high),
+    # now change to percent change and report to 1 dp
+    PC = roundz(100*(PC-1),1),
+    conf.low = roundz(100*(conf.low-1),1),
+    conf.high = roundz(100*(conf.high-1),1),
+    CI = paste(conf.low, ' to ', conf.high, sep='')) %>%
+  left_join(table_names_clintrials, by='term') %>%
+  arrange(Database, group_number, label) %>% # ... arrange alphabetically
+  select(Database, group, label, PC, CI) 
+ftab = flextable(make_table) %>%
+  merge_v(j=1:2) %>%
+  theme_box() %>%
+  fontsize(size=8, part='all') %>% # reduce font size
+  autofit()
+ftab
+```
+
+PC = percent change. CI = confidence interval. Variables selected using elastic net.
+
+Reference groups are: Healthy volunteers = No; Phase = Phase 3; Sponsor = Other; Purpose = Treatment; Masking = Blinded; Assignment = Parallel; Status = Completed. All other variables are continuous or binary meaning the reference group is 'No'. 

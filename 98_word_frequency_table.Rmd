@@ -1,5 +1,5 @@
 ---
-title: "Top ten words in the brief titles of clinicaltrials.gov for studies in women only and men only"
+title: "Supplement table 2: Top ten words in the brief titles of clinicaltrials.gov for studies in women only and men only"
 output: pdf_document
 ---
   
@@ -24,4 +24,4 @@ ftab = select(freqs, gender, word, freq) %>%
 ftab
 ```
 
-Stop words were removed and all text converted to lower case.
+Stop words were removed and all text was converted to lower case.

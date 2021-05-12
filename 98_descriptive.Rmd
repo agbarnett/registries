@@ -1,5 +1,5 @@
 ---
-title: "Descriptive statistics and descriptions of missing data for the two databases"
+title: "Supplement 1: Descriptive statistics and descriptions of missing data for the two databases"
 output:
   word_document: 
     toc: true
@@ -41,19 +41,19 @@ load('data/labels.RData') # from 0_labels.R
 <!--- page break --->
 ###### page break
 
-# clintrials.gov
+# clinicaltrials.gov
 
 ```{r, include=FALSE}
 # get the data and process ready for the regression model
-load('data/clinicaltrials_analysis_ready.RData') # from 1_process_clintrials_data.R 
-source('2_prep_clintrials.R')
+load('data/clinicaltrials_analysis_plus.RData') # from 2a_update_clintrials_data.R 
+source('3_prep_clintrials.R')
 ```
 
 There were `r format(nrow(excluded),big.mark=',')` studies excluded. 
 The total number of remaining studies is `r format(nrow(studies),big.mark=',')`. 
 The data were extracted from clinicaltrials.gov on `r format(censor.date, '%d-%b-%Y')`.
 
-## Missing data
+## Missing data (clinicaltrials.gov)
 
 The plots below summarise the missing data.
 The columns are variables and the rows are observations.
@@ -77,7 +77,7 @@ gplot = vis_dat(ten_thousand)
 gplot + ylab('Studies')
 ```
 
-### Counts of missing data
+### Counts of missing data (clinicaltrials.gov)
 
 The plots below shows the counts of missing data using all studies.
 
@@ -98,9 +98,9 @@ The logical variables cannot be missing by design, for example 'longitudinal' wa
 
 Many variables were mandatory and so cannot be missing, e.g., study status.
 
-## Registration and dates
+## Registration and dates (clinicaltrials.gov)
 
-### Registration dates
+### Registration dates (clinicaltrials.gov)
 
 ```{r, results='asis'}
 dates = dplyr::select(studies, posted, updated) %>%
@@ -126,24 +126,24 @@ ftab
 
 The summary statistics are the median and inter-quartile range.
 
-## Inclusions/Exclusions
+## Inclusions/Exclusions (clinicaltrials.gov)
 
-### Gender included
+### Gender included (clinicaltrials.gov)
 
 ```{r, results='asis'}
 with(studies, freq(gender, cumul = FALSE, report.nas =TRUE))
 ```
 
-### Age included
+### Age included (clinicaltrials.gov)
 
-##### Minimum age
+##### Minimum age (clinicaltrials.gov)
 
 ```{r, results='asis'}
 with(studies, freq(age_min_type, cumul = FALSE, report.nas =TRUE, order='freq'))
 ```
 
 
-##### Minimum age limit in years
+##### Minimum age limit in years (clinicaltrials.gov)
 
 ```{r, fig.width=7}
 # split by age
@@ -184,13 +184,13 @@ This plot is just for the `r format(nrow(to.plot), big.mark=',')` studies that h
 By far the most common minimum age is 18.
 The oldest exclusion for minimum age was `r max(to.plot$age_min)` years.
 
-##### Maximum age
+##### Maximum age (clinicaltrials.gov)
 
 ```{r, results='asis'}
 with(studies, freq(age_max_type, cumul = FALSE, report.nas =TRUE, order='freq'))
 ```
 
-##### Maximum age limit in years
+##### Maximum age limit in years (clinicaltrials.gov)
 
 ```{r, fig.width=7}
 # split by age
@@ -228,45 +228,45 @@ grid.arrange(hplot1, hplot2, ncol=2)
 This plot is just for the `r format(nrow(to.plot), big.mark=',')` studies that had a maximum age limit.
 The oldest exclusion for maximum age was `r max(to.plot$age_max)` years.
 
-### Healthy volunteers included
+### Healthy volunteers included (clinicaltrials.gov)
 
 ```{r, results='asis'}
 with(studies, freq(volunteers, cumul = FALSE, report.nas =TRUE))
 ```
 
-## Study characteristics
+## Study characteristics (clinicaltrials.gov)
 
-### Purpose 
+### Purpose (clinicaltrials.gov)
 
 ```{r, results='asis'}
 with(studies, freq(purpose, cumul = FALSE, report.nas =TRUE, order='freq'))
 ```
 
-### Masking 
+### Masking (clinicaltrials.gov)
 
 ```{r, results='asis'}
 with(studies, freq(masking, cumul = FALSE, report.nas =TRUE, order='freq'))
 ```
 
-### Assignment 
+### Assignment (clinicaltrials.gov)
 
 ```{r, results='asis'}
 with(studies, freq(assignment, cumul = FALSE, report.nas =TRUE, order='freq'))
 ```
 
-### Allocation 
+### Allocation (clinicaltrials.gov)
 
 ```{r, results='asis'}
 with(studies, freq(allocation, cumul = FALSE, report.nas =TRUE, order='freq'))
 ```
 
-### Phase 
+### Phase (clinicaltrials.gov)
 
 ```{r, results='asis'}
 with(studies, freq(phase, cumul = FALSE, report.nas =TRUE))
 ```
 
-### Adaptive/platform trial 
+### Adaptive/platform trial (clinicaltrials.gov)
 
 ```{r, results='asis'}
 with(studies, freq(adaptive_trial, cumul = FALSE, report.nas =FALSE))
@@ -274,7 +274,7 @@ with(studies, freq(adaptive_trial, cumul = FALSE, report.nas =FALSE))
 
 Was an adaptive or platform trial mentioned in the study description.
 
-### Longitudinal
+### Longitudinal (clinicaltrials.gov)
 
 ```{r, results='asis'}
 with(studies, freq(longitudinal, cumul = FALSE, report.nas =FALSE))
@@ -282,7 +282,7 @@ with(studies, freq(longitudinal, cumul = FALSE, report.nas =FALSE))
 
 Was longitudinal mentioned in the study description.
 
-### Number of outcomes
+### Number of outcomes (clinicaltrials.gov)
 
 ```{r, results='asis'}
 # could add 10% and 90%?
@@ -293,78 +293,68 @@ descr(to.summary, stats=c('fivenum'))
 Number of primary and secondary outcomes.
 A small number of studies had a huge number of outcomes.
 
-## Study status
+## Study status (clinicaltrials.gov)
 
 ```{r, results='asis'}
 with(studies, freq(status, cumul = FALSE, report.nas =FALSE, order='freq')) 
 ```
 
 
-## Funding
+## Funding (clinicaltrials.gov)
 
-### Lead sponsor type
+### Lead sponsor type (clinicaltrials.gov)
 
 ```{r, results='asis'}
 with(studies, freq(lead_sponsor_class, cumul = FALSE, report.nas =FALSE, order='freq'))
 ```
 
+## Sample size (clinicaltrials.gov)
 
-## Sample size
-
-### Actual and achieved sample size
+### Target and achieved sample size (clinicaltrials.gov)
 
 ```{r, results='asis'}
-sample = select(studies, status, sample_size, sample_size_type) %>%
-  filter(!status=='Withdrawn' | sample_size_type =='Anticipated') # exclude those withdrawn with an actual sample size (often zero)
-stby(data = sample, 
-           INDICES = sample$sample_size_type, 
-           FUN = descr, stats = "fivenum", transpose = TRUE)
-zero.studies = nrow(filter(studies, sample_size == 0))
+sample = select(studies, samplesize_target, samplesize_actual) %>%
+  rename('Target' = 'samplesize_target',
+         'Achieved' = 'samplesize_actual')
+descr(sample, stats='fivenum')
+zero.studies = nrow(filter(studies, samplesize_target == 0))
 ```
 
 The table shows summary statistics.
 
-There were `r zero.studies` studies with a zero sample size.
+There were `r zero.studies` studies with a zero target sample size.
 
+### Histogram of sample size (clinicaltrials.gov)
 
-### Histogram of sample size
-
-```{r, fig.width=8}
-exclude_large = filter(studies, sample_size < 2000) # exclude extremely large genetics study
-
-#
-hplot = ggplot(exclude_large, aes(x=sample_size))+
+```{r}
+exclude_large = filter(studies, samplesize_target < 2000) # exclude extremely large genetics study
+hplot = ggplot(exclude_large, aes(x=samplesize_target))+
   geom_histogram(fill='chocolate1')+
-  xlab('Sample size')+
-  g.theme+
-  facet_wrap(~sample_size_type, scales='free_y')
+  xlab('Target sample size')+
+  g.theme
 hplot
 ```
 
 The plot above is for the `r format(nrow(exclude_large), big.mark=',')` studies with a target sample size under 2,000.
 
-
-### Histogram looking for digit preference in target sample size
+### Histogram looking for digit preference in target sample size (clinicaltrials.gov)
 
 ```{r, fig.width=8}
 # exclude huge studies
-exclude_large = filter(studies, sample_size <= 200) # exclude extremely large genetics study
+exclude_large = filter(studies, samplesize_target <= 200) # exclude extremely large genetics study
 # frequency
-digits = group_by(exclude_large, sample_size_type, sample_size) %>%
-  summarise(n=n()) %>%
-  ungroup() 
-top_five = group_by(digits, sample_size_type) %>% # per type (facet)
-  arrange(-n) %>%
+digits = group_by(exclude_large, samplesize_target) %>% # per type (facet)
+  tally() 
+top_five = arrange(digits, -n) %>%
   slice(1:5) %>% # top 5 per facet
   ungroup()
 # plot
-hplot = ggplot(digits, aes(x=sample_size, y=n))+
+hplot = ggplot(digits, aes(x=samplesize_target, y=n))+
   geom_bar(stat="identity", col='chocolate2')+
   xlab('Sample size')+
   ylab('Number of studies')+
-  geom_label(data=top_five, aes(x=sample_size, y=n, label=sample_size))+
-  g.theme+
-  facet_wrap(~sample_size_type, scales='free_y')
+  geom_label(data=top_five, aes(x=samplesize_target, y=n, label=samplesize_target))+
+  g.theme
 hplot
 jpeg('figures/digit_preference_clintrials.jpg', width=5, height=4, units='in', res=300)
 print(hplot)
@@ -384,7 +374,7 @@ There is a strong digit preference at multiples of ten. The modal sample size is
 # get the data
 load('data/AnalysisReady.RData') # from 0_read_data_anzctr.R 
 # prep the data as per the models
-source('2_prep_ANZCTR.R')
+source('3_prep_ANZCTR.R')
 ```
 
 These summary statistics are for trials registered in ANZCTR and not clinicaltrials.gov.
@@ -392,7 +382,7 @@ These summary statistics are for trials registered in ANZCTR and not clinicaltri
 The total number of studies is `r format(nrow(studies),big.mark=',')`. 
 The data were extracted from ANZCTR on `r format(censor.date, '%d-%b-%Y')`.
 
-## Missing data
+## Missing data (ANZCTR)
 
 The columns are variables and the rows are observations.
 The grey areas show missing data.
@@ -408,7 +398,7 @@ gplot + ylab('Studies')
 ```
 
 
-### Counts of missing data
+### Counts of missing data (ANZCTR)
 
 The plots below shows the counts of missing data.
 
@@ -422,9 +412,9 @@ cplot + xlab('')+
 ```
 
 
-## Registration and dates
+## Registration and dates (ANZCTR)
 
-### Registration dates
+### Registration dates (ANZCTR)
 
 ```{r, results='asis'}
 dates = select(studies, submitted, approved, update) %>%
@@ -450,7 +440,7 @@ ftab
 
 The summary statistics are the median and inter-quartile range.
 
-### Anticipated start date
+### Anticipated start date (ANZCTR)
 
 ```{r}
 stats = filter(studies, !is.na(start_anticipated)) %>%
@@ -470,23 +460,23 @@ ftab
 
 The summary statistics are the minimum, inter-quartile range, median and maximum.
 
-## Inclusions/Exclusions
+## Inclusions/Exclusions (ANZCTR)
 
-### Gender included
+### Gender included (ANZCTR)
 
 ```{r, results='asis'}
 with(studies, freq(gender, cumul = FALSE, report.nas =TRUE))
 ```
 
-### Age included
+### Age included (ANZCTR)
 
-#### Minimum age
+#### Minimum age (ANZCTR)
 
 ```{r, results='asis'}
 with(studies, freq(age_min_type, cumul = FALSE, report.nas =TRUE, order='freq'))
 ```
 
-#### Minimum age limit in years
+#### Minimum age limit in years (ANZCTR)
 
 ```{r, fig.width=7}
 # split by age
@@ -525,13 +515,13 @@ This plot is just for the `r format(nrow(to.plot), big.mark=',')` studies that h
 By far the most common minimum age is 18.
 The oldest exclusion for minimum age was `r max(to.plot$age_min)` years.
 
-#### Maximum age
+#### Maximum age (ANZCTR)
 
 ```{r, results='asis'}
 with(studies, freq(age_max_type, cumul = FALSE, report.nas =TRUE, order='freq'))
 ```
 
-#### Maximum age limit in years
+#### Maximum age limit in years (ANZCTR)
 
 ```{r, fig.width=7}
 # split by age
@@ -571,66 +561,63 @@ The oldest exclusion for maximum age was `r max(to.plot$age_max)` years.
 
 There is a strong digit preference in the age limit with spikes in multiples of five years.
 
-### Healthy volunteers included
+### Healthy volunteers included (ANZCTR)
 
 ```{r, results='asis'}
 with(studies, freq(volunteers, cumul = FALSE, report.nas =TRUE))
 ```
 
-## Study characteristics
+## Study characteristics (ANZCTR)
 
-
-### Purpose 
+### Purpose (ANZCTR)
 
 ```{r, results='asis'}
 with(studies, freq(purpose, cumul = FALSE, report.nas =TRUE, order='freq'))
 ```
 
-### Assignment
+### Assignment (ANZCTR)
 
 ```{r, results='asis'}
 with(studies, freq(assignment, cumul = FALSE, report.nas =TRUE, order='freq'))
 ```
 
-### Allocation 
+### Allocation (ANZCTR) 
 
 ```{r, results='asis'}
 with(studies, freq(allocation, cumul = FALSE, report.nas =TRUE, order='freq'))
 ```
 
-### Masking 
+### Masking (ANZCTR) 
 
 ```{r, results='asis'}
 with(studies, freq(masking, cumul = FALSE, report.nas =TRUE, order='freq'))
 ```
 
-### Intervention code
+### Intervention code (ANZCTR)
 
 ```{r, results='asis'}
 with(studies, freq(intervention_code, cumul = FALSE, report.nas =TRUE, order='freq'))
 ```
 
-### Endpoint
+### Endpoint (ANZCTR)
 
 ```{r, results='asis'}
 with(studies, freq(endpoint, cumul = FALSE, report.nas =TRUE, order='freq'))
 ```
 
-### Phase 
+### Phase (ANZCTR) 
 
 ```{r, results='asis'}
 with(studies, freq(phase, cumul = FALSE, report.nas =TRUE))
 ```
 
-### Control 
+### Control (ANZCTR) 
 
 ```{r, results='asis'}
 with(studies, freq(control, cumul = FALSE, report.nas =TRUE, order='freq'))
 ```
 
-
-
-### Number of outcomes
+### Number of outcomes (ANZCTR)
 
 ```{r, results='asis'}
 to.summary = select(studies, n_primary, n_secondary)
@@ -639,15 +626,15 @@ descr(to.summary, stats=c('fivenum'))
 
 Number of primary and secondary outcomes.
 
-## Health conditions
+## Health conditions (ANZCTR)
 
-### Condition code #1
+### Condition code #1 (ANZCTR)
 
 ```{r, results='asis'}
 with(studies, freq(ccode1, cumul = FALSE, report.nas =FALSE, order='freq')) 
 ```
 
-### Condition code #2 (top 10)
+### Condition code #2, top 10 (ANZCTR)
 
 ```{r, results='asis'}
 freq = group_by(studies, ccode2) %>%
@@ -663,7 +650,7 @@ with(to.table, freq(ccode2, cumul = FALSE, report.nas =FALSE, order='freq'))
 There are `r length(unique(studies$ccode2))` condition codes, hence we just show the top ten.
 Conditions outside the top ten have been grouped together as 'other'.
 
-### Condition as free text (top 10)
+### Condition as free text, top 10 (ANZCTR)
 
 ```{r, results='asis'}
 freq = group_by(studies, condition) %>%
@@ -680,18 +667,17 @@ There are `r format(length(unique(studies$condition)), big.mark=',')` conditions
 
 This field is free text and so relies on what researchers write. Some categories could likely be combined, e.g., "prostate cancer" and "prostate cancer patients".
 
-## Study status
+## Study status (ANZCTR)
 
-### Study status
+### Study status (ANZCTR)
 
 ```{r, results='asis'}
 with(studies, freq(study_status, cumul = FALSE, report.nas =FALSE, order='freq')) 
 ```
 
+## Sponsors and funding (ANZCTR)
 
-## Sponsors and funding
-
-### Top institutes
+### Top institutes (ANZCTR)
 
 ```{r, results='asis'}
 freq = group_by(studies, address) %>%
@@ -706,15 +692,15 @@ with(to.table, freq(address, cumul = FALSE, report.nas =FALSE, order='freq'))
 
 There are `r format(length(unique(studies$address)), big.mark=',')` institutes, hence we just show the top ten.
 
-### Funding
+### Funding (ANZCTR)
 
-#### Number of funders
+#### Number of funders (ANZCTR)
 
 ```{r, results='asis'}
 with(studies, freq(n_funding, cumul = FALSE, report.nas =FALSE))
 ```
 
-#### Funding type
+#### Funding type (ANZCTR)
 
 ```{r, results='asis'}
 with(funding_data, freq(type, cumul = FALSE, report.nas =FALSE, order='freq'))
@@ -722,7 +708,7 @@ with(funding_data, freq(type, cumul = FALSE, report.nas =FALSE, order='freq'))
 
 This includes multiple results per study.
 
-#### Funders (top 10)
+#### Funders, top 10 (ANZCTR)
 
 ```{r, results='asis'}
 freq = group_by(funding_data, name) %>%
@@ -740,9 +726,9 @@ This includes multiple results per study.
 There are `r format(length(unique(funding_data$name)), big.mark=',')` funders, hence we just show the top ten.
 
 
-## Sample size
+## Sample size (ANZCTR)
 
-### Target and achieved sample size
+### Target and achieved sample size (ANZCTR)
 
 ```{r, results='asis'}
 sample = select(studies, samplesize_target, samplesize_actual) %>%
@@ -757,7 +743,7 @@ The table shows summary statistics.
 There were `r zero.studies` studies with a zero target sample size.
 
 
-### Histogram of sample size
+### Histogram of sample size (ANZCTR)
 
 ```{r}
 exclude_large = filter(studies, samplesize_target < 2000) # exclude extremely large genetics study
@@ -770,7 +756,7 @@ hplot
 
 The plot above is for the `r format(nrow(exclude_large), big.mark=',')` studies with a target sample size under 2,000.
 
-#### Histogram looking for digit preference in target sample size
+#### Histogram looking for digit preference in target sample size (ANZCTR)
 
 ```{r, fig.width=8}
 #

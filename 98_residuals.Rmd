@@ -1,5 +1,5 @@
 ---
-title: "Histograms of residuals"
+title: "Supplement Figure 5: Histograms of residuals"
 output: pdf_document
 classoption: portrait
 ---
@@ -11,37 +11,15 @@ options(scipen=999) # avoid scientific presentation
 
 library(dplyr)
 library(ggplot2)
+library(scales)
 g.theme = theme_bw() + theme(panel.grid.minor = element_blank())
+
+# colours
+anzctr_colour = 'lemonchiffon2'
+clintrials_colour = 'cadetblue2'
 ```
 
-These are the residuals for the models of target and actual sample size.
-
-## clintrials.gov
-
-```{r, fig.width=6, fig.height=3}
-# get the results
-load('results/clintrials_sample_size.RData') # from 2_elasticnet_model_samplesize_clintrial.R
-#
-all_res = NULL
-for (outcome_type in c('target','actual')){ # get residuals for both 
-    mtype = paste(outcome_type)
-    res = data.frame(res = resid(standard_models[[mtype]]))
-    frame = data.frame(model=mtype, res=res)
-    all_res = bind_rows(all_res, frame)
-}
-rplot = ggplot(all_res, aes(x=res))+
-  geom_histogram(fill='firebrick3')+
-  g.theme+
-  xlab('Residual (log-scale)')+
-  ylab('Count')+
-  facet_wrap(~model, scales='free')
-rplot
-```
-
-The plot shows the residuals for the actual and target sample size, and for the interventional and observational studies.
-The x- and y-axes vary by panel.
-
-\thispagestyle{empty} 
+# Models of target and actual sample size.
 
 ## ANZCTR
 
@@ -57,7 +35,38 @@ for (outcome_type in c('target','actual')){ # get residuals for both
     all_res = bind_rows(all_res, frame)
 }
 rplot = ggplot(all_res, aes(x=res))+
-  geom_histogram(fill='darkorange1')+
+  geom_histogram(fill=anzctr_colour)+
+  scale_y_continuous(label=comma)+
+  g.theme+
+  xlab('Residual (log-scale)')+
+  ylab('Count')+
+  facet_wrap(~model, scales='free')
+rplot
+```
+
+
+The plot shows the residuals for the actual and target sample size, and for the interventional and observational studies.
+The x- and y-axes vary by panel.
+
+\thispagestyle{empty} 
+
+
+## clintrials.gov
+
+```{r, fig.width=6, fig.height=3}
+# get the results
+load('results/clintrials_sample_size.RData') # from 2_elasticnet_model_samplesize_clintrial.R
+#
+all_res = NULL
+for (outcome_type in c('target','actual')){ # get residuals for both 
+    mtype = paste(outcome_type)
+    res = data.frame(res = resid(standard_models[[mtype]]))
+    frame = data.frame(model=mtype, res=res)
+    all_res = bind_rows(all_res, frame)
+}
+rplot = ggplot(all_res, aes(x=res))+
+  geom_histogram(fill=clintrials_colour)+
+  scale_y_continuous(label=comma)+
   g.theme+
   xlab('Residual (log-scale)')+
   ylab('Count')+
@@ -67,15 +76,34 @@ rplot
 
 \thispagestyle{empty} 
 
-## Models of the target to actual sample size ratio
+# Models of the target to actual sample size ratio
 
-```{r, fig.width=4, fig.height=4}
+## ANZCTR
+
+```{r, fig.width=3.5, fig.height=3.5}
 # get the results
-load('results/sample_size_ratio.RData') # from 2_model_actual_target_ratio.R
+load('results/sample_size_ratio.RData') # from 3_model_actual_target_ratio_ANZCTR.R
 
 res = data.frame(res = resid(standard_models[["1se"]]))
 rplot = ggplot(res, aes(x=res))+
-  geom_histogram(fill='seagreen3')+
+  geom_histogram(fill=anzctr_colour)+
+  scale_y_continuous(label=comma)+
+  g.theme+
+  xlab('Residual (log-scale)')+
+  ylab('Count')
+rplot
+```
+
+## clinicaltrials.gov
+
+```{r, fig.width=3.5, fig.height=3.5}
+# get the results
+load('results/sample_size_ratio_clintrials.RData') # from 3_model_actual_target_ratio_clintrials.R
+
+res = data.frame(res = resid(standard_models[["1se"]]))
+rplot = ggplot(res, aes(x=res))+
+  geom_histogram(fill=clintrials_colour)+
+  scale_y_continuous(label=comma)+
   g.theme+
   xlab('Residual (log-scale)')+
   ylab('Count')

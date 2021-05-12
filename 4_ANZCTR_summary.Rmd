@@ -1,0 +1,505 @@
+---
+title: "ANZCTR summary"
+author: "Adrian Barnett"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  word_document: 
+    toc: true
+    toc_depth: 2
+    reference_docx: rmarkdown-styles-reference.docx
+---
+
+```{r setup, include=FALSE}
+# using formatting in Word document (see above)
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message=FALSE, error=FALSE, comment='', dpi=400)
+options(width=1000) # Wide pages
+options(scipen=999) # avoid scientific presentation
+library(dplyr)
+library(broom)
+library(stringr)
+library(visdat) # for missing data
+library(ggplot2)
+library(gridExtra)
+library(ggupset) # to plot combination of study characteristics
+library(flextable)
+library(summarytools)
+# global options for summary tools
+st_options(plain.ascii = FALSE,       # Always use this option in Rmd documents
+            style = "rmarkdown",        # This too
+            round.digits = 0, 
+            headings = FALSE, 
+            footnote = NA,             # Avoids footnotes which would clutter the results
+            subtitle.emphasis = FALSE  # Improves layout with some rmardown themes
+) 
+# for PLOS
+library(extrafont)
+loadfonts(device = "win")
+
+# graphics things:
+g.theme = theme_bw() + theme(panel.grid.minor = element_blank())
+cbPalette <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#999999", "#CC79A7")
+
+# get the data
+load('data/AnalysisReady.RData') # from 0_read_data_anzctr.R 
+source('99_functions.R')
+```
+
+These summary statistics are for trials registered in ANZCTR and not clinicaltrials.gov.
+
+The total number of studies is `r format(nrow(studies),big.mark=',')`. 
+The data were extracted from ANZCTR on `r censor.date`.
+
+# Missing data
+
+The columns are variables and the rows are observations.
+The grey areas show missing data.
+
+```{r, fig.width=8}
+for.missing = dplyr::select(studies, -pub, -time, -ID, -id, -starts_with('n_'))
+vis_dat(for.missing)
+```
+
+# Registration and dates
+
+## Registration dates
+
+```{r, results='asis'}
+dates = select(studies, submitted, approved, update) %>%
+  tidyr::gather(key='date', value='res') %>%
+  group_by(date) %>%
+  filter(!is.na(res)) %>% # remove missing
+  summarise(n=n(), 
+            median = median(res), 
+            q1 = as.Date(quantile(unclass(res), 0.25), origin = "1970-01-01"),
+            q3 = as.Date(quantile(unclass(res), 0.75), origin = "1970-01-01")) %>%
+  mutate(date = factor(date, levels=c('submitted','approved','update')),
+         n = format(n,big.mark = ','),
+         median = as.Date(median, origin='1970-01-01'),
+         median = format(median, '%b %Y'), # just month and year
+         q1 = format(q1, '%b %Y'),
+         q3 = format(q3, '%b %Y')) %>% 
+  arrange(date)
+ftab = flextable(dates) %>%
+  theme_box() %>%
+  autofit()
+ftab
+```
+
+The summary statistics are the median and inter-quartile range.
+
+## Anticipated start date
+
+```{r}
+stats = filter(studies, !is.na(start_anticipated)) %>%
+  mutate(start_anticipated = as.numeric(start_anticipated)) %>%
+        summarise(min=min(start_anticipated),
+                  q1=quantile(start_anticipated, probs=0.25),
+                  median=median(start_anticipated),
+                  q3=quantile(start_anticipated, probs=0.75),
+                  max=max(start_anticipated)) %>%
+  mutate_all(funs(as.Date(., origin='1970-01-01'))) %>%
+  mutate_all(funs(format(., '%b %Y'))) # change all to month - year
+ftab = flextable(stats) %>%
+  theme_box() %>%
+  autofit()
+ftab
+```
+
+The summary statistics are the minimum, inter-quartile range, median and maximum.
+
+# Inclusions/Exclusions
+
+## Gender included
+
+```{r, results='asis'}
+with(studies, freq(gender, cumul = FALSE, report.nas =TRUE))
+```
+
+## Age included
+
+#### Minimum age
+
+```{r, results='asis'}
+with(studies, freq(age_min_type, cumul = FALSE, report.nas =TRUE, order='freq'))
+```
+
+#### Minimum age limit in years
+
+```{r, fig.width=7}
+# split by age
+to.plot = filter(studies, !is.na(age_min)) 
+# round to years for over 1
+over_1 = filter(to.plot, age_min >=1) %>%
+  mutate(age_min = round(age_min)) %>%
+  group_by(age_min) %>%
+  summarise(n = n()) %>%
+  ungroup()
+# round to months for under 1
+under_1 = filter(to.plot, age_min < 1) %>%
+  mutate(age_min = floor(age_min*12)) %>%
+  group_by(age_min) %>%
+  summarise(n = n()) %>%
+  ungroup()
+# separate plots
+hplot1 = ggplot(under_1, aes(x=age_min, y=n))+
+  geom_histogram(fill='darkseagreen', stat='identity')+
+  scale_x_continuous(breaks=0:12)+
+  xlab('Minimum age (months)')+
+  ylab('Count')+
+  g.theme+
+  ggtitle('Age under 1')
+hplot2 = ggplot(over_1, aes(x=age_min, y=n))+
+  geom_histogram(fill='darkseagreen', stat='identity')+
+  xlab('Minimum age (years)')+
+  ylab('Count')+
+  g.theme+
+  ggtitle('Age 1 and over')
+# combine plot
+grid.arrange(hplot1, hplot2, ncol=2)
+```
+
+This plot is just for the `r format(nrow(to.plot), big.mark=',')` studies that had a minimum age limit.
+By far the most common minimum age is 18.
+The oldest exclusion for minimum age was `r max(to.plot$age_min)` years.
+
+#### Maximum age
+
+```{r, results='asis'}
+with(studies, freq(age_max_type, cumul = FALSE, report.nas =TRUE, order='freq'))
+```
+
+#### Maximum age limit in years
+
+```{r, fig.width=7}
+# split by age
+to.plot = filter(studies, !is.na(age_max)) 
+# round to years for over 1
+over_1 = filter(to.plot, age_max >=1) %>%
+  mutate(age_max = round(age_max)) %>%
+  group_by(age_max) %>%
+  summarise(n = n()) %>%
+  ungroup()
+# round to months for under 1
+under_1 = filter(to.plot, age_max < 1) %>%
+  mutate(age_max = floor(age_max*12)) %>%
+  group_by(age_max) %>%
+  summarise(n = n()) %>%
+  ungroup()
+# separate plots
+hplot1 = ggplot(under_1, aes(x=age_max, y=n))+
+  geom_histogram(fill='dodgerblue', stat='identity')+
+  scale_x_continuous(breaks=0:12)+
+  xlab('Maximum age (months)')+
+  ylab('Count')+
+  g.theme+
+  ggtitle('Age under 1')
+hplot2 = ggplot(over_1, aes(x=age_max, y=n))+
+  geom_histogram(fill='dodgerblue', stat='identity')+
+  xlab('Maximum age (years)')+
+  ylab('Count')+
+  g.theme+
+  ggtitle('Age 1 and over')
+# combine plot
+grid.arrange(hplot1, hplot2, ncol=2)
+```
+
+
+This plot is just for the `r format(nrow(to.plot), big.mark=',')` studies that had a maximum age limit.
+The oldest exclusion for maximum age was `r max(to.plot$age_max)` years.
+
+There is a strong digit preference in the age limit with spikes in multiples of five years.
+
+# Study characteristics
+
+## Purpose
+
+```{r, results='asis'}
+with(studies, freq(purpose, cumul = FALSE, report.nas =TRUE, order='freq'))
+```
+
+## Masking
+
+```{r, results='asis'}
+with(studies, freq(masking, cumul = FALSE, report.nas =TRUE, order='freq'))
+```
+
+## Intervention code
+
+```{r, results='asis'}
+with(studies, freq(intervention_code, cumul = FALSE, report.nas =TRUE, order='freq'))
+```
+
+## Control
+
+```{r, results='asis'}
+with(studies, freq(control, cumul = FALSE, report.nas =TRUE, order='freq'))
+```
+
+## Phase
+
+```{r, results='asis'}
+with(studies, freq(phase, cumul = FALSE, report.nas =TRUE))
+```
+
+## Endpoint
+
+```{r, results='asis'}
+with(studies, freq(endpoint, cumul = FALSE, report.nas =TRUE, order='freq'))
+```
+
+## Number of outcomes
+
+```{r, results='asis'}
+to.summary = select(studies, n_primary, n_secondary)
+descr(to.summary, stats=c('fivenum'))
+```
+
+Number of primary and secondary outcomes.
+
+# Health conditions
+
+## Condition code #1
+
+```{r, results='asis'}
+with(studies, freq(ccode1, cumul = FALSE, report.nas =FALSE, order='freq')) 
+```
+
+## Condition code #2 (top 10)
+
+```{r, results='asis'}
+freq = group_by(studies, ccode2) %>%
+  summarise(n = n()) %>%
+  ungroup() %>%
+  arrange(-n) %>%
+  slice(1:10) # just top ten
+to.table = mutate(studies,
+                  ccode2 = ifelse(ccode2 %in% freq$ccode2, ccode2, 'Other')) # replace conditions outside top 10 with 'other'
+with(to.table, freq(ccode2, cumul = FALSE, report.nas =FALSE, order='freq')) 
+```
+
+There are `r length(unique(studies$ccode2))` condition codes, hence we just show the top ten.
+Conditions outside the top ten have been grouped together as 'other'.
+
+## Condition as free text (top 10)
+
+```{r, results='asis'}
+freq = group_by(studies, condition) %>%
+  summarise(n = n()) %>%
+  ungroup() %>%
+  arrange(-n) %>%
+  slice(1:10) # just top ten
+to.table = mutate(studies,
+                  condition = ifelse(condition %in% freq$condition, condition, 'Other')) # replace conditions outside top 10 with 'other'
+with(to.table, freq(condition, cumul = FALSE, report.nas =FALSE, order='freq')) 
+```
+
+There are `r format(length(unique(studies$condition)), big.mark=',')` conditions as free text, hence we just show the top ten.
+
+This field is free text and so relies on what researchers write. Some categories could likely be combined, e.g., "prostate cancer" and "prostate cancer patients".
+
+# Study status
+
+## Study status
+
+```{r, results='asis'}
+with(studies, freq(study_status, cumul = FALSE, report.nas =FALSE, order='freq')) 
+```
+
+## Study-related publication listed
+
+```{r, results='asis'}
+with(studies, freq(pub, cumul = FALSE, report.nas =FALSE, order='freq')) 
+```
+
+This is just a check of whether there is a study publication listed. It does not check whether it is the main publication of the study results.
+
+# Sponsors and funding
+
+## Top institutes
+
+```{r, results='asis'}
+freq = group_by(studies, address) %>%
+  summarise(n = n()) %>%
+  ungroup() %>%
+  arrange(-n) %>%
+  slice(1:10) # just top ten
+to.table = mutate(studies,
+                  address = ifelse(address %in% freq$address, address, 'Other')) # replace those outside top 10 with 'other'
+with(to.table, freq(address, cumul = FALSE, report.nas =FALSE, order='freq')) 
+```
+
+There are `r format(length(unique(studies$address)), big.mark=',')` institutes, hence we just show the top ten.
+
+## Funding
+
+### Number of funders
+
+```{r, results='asis'}
+with(studies, freq(n_funding, cumul = FALSE, report.nas =FALSE))
+```
+
+### Funding type
+
+```{r, results='asis'}
+with(funding_data, freq(type, cumul = FALSE, report.nas =FALSE, order='freq'))
+```
+
+This includes multiple results per study.
+
+### Funders (top 10)
+
+```{r, results='asis'}
+freq = group_by(funding_data, name) %>%
+  summarise(n = n()) %>%
+  ungroup() %>%
+  arrange(-n) %>%
+  slice(1:10) # just top ten
+to.table = mutate(funding_data,
+                  name = ifelse(name %in% freq$name, name, 'Other')) # replace funders outside top 10 with 'other'
+with(to.table, freq(name, cumul = FALSE, report.nas =FALSE, order='freq')) 
+```
+
+This includes multiple results per study.
+
+There are `r format(length(unique(funding_data$name)), big.mark=',')` funders, hence we just show the top ten.
+
+
+# Sample size
+
+## Target and achieved sample size
+
+```{r, results='asis'}
+sample = select(studies, samplesize_target, samplesize_actual) %>%
+  rename('Target' = 'samplesize_target',
+         'Achieved' = 'samplesize_actual')
+descr(sample, stats='fivenum')
+zero.studies = nrow(filter(studies, samplesize_target == 0))
+```
+
+The table shows summary statistics.
+
+There were `r zero.studies` studies with a zero target sample size.
+
+
+## Histogram of sample size
+
+```{r}
+exclude_large = filter(studies, samplesize_target < 2000) # exclude extremely large genetics study
+hplot = ggplot(exclude_large, aes(x=samplesize_target))+
+  geom_histogram(fill='chocolate1')+
+  xlab('Target sample size')+
+  g.theme
+hplot
+```
+
+The plot above is for the `r format(nrow(exclude_large), big.mark=',')` studies with a target sample size under 2,000.
+
+### Histogram looking for digit preference in target sample size
+
+```{r, fig.width=8}
+#
+exclude_large = filter(studies, samplesize_target <= 200) # exclude extremely large genetics study
+# 
+digits = group_by(exclude_large, samplesize_target) %>%
+  summarise(n=n()) %>%
+  ungroup() %>%
+  arrange(-n) %>%
+  slice(1:10) # top 10
+# plot
+hplot = ggplot(exclude_large, aes(x=samplesize_target))+
+  geom_histogram(fill='chocolate2', breaks=0:200)+
+  xlab('Target sample size')+
+  geom_label(data=digits, aes(x=samplesize_target, y=n, label=samplesize_target))+
+  g.theme
+hplot
+jpeg('figures/digit_preference.jpg', width=5, height=4, units='in', res=300)
+print(hplot)
+invisible(dev.off())
+```
+
+The plot above is for the `r format(nrow(exclude_large), big.mark=',')` studies with a target sample size of 200 or fewer.
+
+There is a strong digit preference at multiples of ten. The modal sample size is `r digits$samplesize_target[1]`.
+
+
+## Multiple regression model of target and actual sample size
+
+```{r, include=FALSE}
+## load data/results
+# check if results are already available
+is_results = length(dir('results', pattern = 'ANZCTR_sample_size')) > 0
+if(is_results == TRUE){
+  load('results/ANZCTR_sample_size.RData')
+}
+if(is_results == FALSE){
+  source('2_elasticnet_model_samplesize_ANZCTR.R')
+}
+
+# get the labels
+load('data/labels.RData') # from 0_labels.R
+```
+
+We used elastic net. 
+Selected parsimonious model as minimum cross-validated error plus 1 standard error.
+Checked the final model for colinearity using the variance-inflation factor (VIF).
+
+We log-transformed (base e) the sample size because of a very strong positive skew.
+The plot shows the estimated mean and 95% confidence interval on the untransformed scale.
+
+### Plot of percent differences for the sample size
+
+```{r, fig.width=8, fig.height=9.5}
+to_plot = plot_function(indata=all_ests, 
+                        ljust=0.35, # move legend at top
+                        lsize=9, # labels have to be smaller
+                        table_names=table_names_anzctr,
+                        x_limits = seq(-100,300,100),
+                        minor_breaks = seq(-100,350,50))
+to_plot
+# save for paper
+save(to_plot, file='figures/fig4.RData')
+# export to tall-thin plot
+jpeg('figures/ANZCTR_sample_size_relative_actual.jpg', width=6.5, height=9.5, units='in', res=600)
+print(to_plot)
+invisible(dev.off())
+# for PLOS
+tiff('figures/Fig4.tif', width=6.5, height=8.75, units='in', res=600, family='Times New Roman', compression = 'lzw') # 
+print(to_plot)
+invisible(dev.off())
+```
+
+The number of studies was `r format(filter(numbers, outcome=='actual') %>% pull(n_model), big.mark=',')`.
+
+### Check residuals from regression model
+
+#### a) Target sample size
+
+```{r, fig.width=7, fig.height=3.5}
+otype = 'target'
+  res = data.frame(res = resid(standard_models[[otype]]))
+rplot = ggplot(res, aes(x=res))+
+  geom_histogram(fill='firebrick3')+
+  g.theme+
+  xlab('Residual (log-scale)')+
+  ylab('Count')
+rplot
+# r-squared
+# rsq = cor(log2(for.model$samplesize_target), fitted(smodel)) ^2
+```
+
+The scales on the y-axes differ across panels.
+
+#### b) Actual sample size
+
+```{r, fig.width=7, fig.height=3.5}
+otype = 'actual'
+res = data.frame(res = resid(standard_models[[otype]]))
+rplot = ggplot(res, aes(x=res))+
+  geom_histogram(fill='firebrick3')+
+  g.theme+
+  xlab('Residual (log-scale)')+
+  ylab('Count')
+rplot
+```
+
+

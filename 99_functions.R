@@ -1,6 +1,48 @@
 # 99_functions.R
 # functions for reading data
-# December 2020
+# March 2021
+
+# function to extract sample size from historical clintrials data
+sample_historical = function(intable, id, index){
+   # get the earliest and latest results
+   address = paste(url, intable$links[index], sep='')
+   download_xml(url=address, file='web/page.html')
+   in_page <- read_html('web/page.html') 
+   
+   # extract the study status ...
+   study_status = as.character(in_page %>% html_nodes("#StudyStatus") %>% html_nodes("td"))
+   # ... then get the latest status
+   l_index = which(str_detect(string=study_status, pattern='Overall Status'))
+   status = str_trim(str_remove_all(study_status[l_index+1], pattern='\\n|^<td>|</td>$'))
+   
+   # if missing status then exclude
+   if(length(status)==0){
+      f = data.frame(id = id, date = table$dates[index], status = 'Missing', sample_size_type = NA, sample_size = NA)
+      return(f)
+   }
+   # if withheld then no data
+   if(status=='Withheld'){
+      f = data.frame(id = id, date = table$dates[index], status = 'Withheld', sample_size_type = NA, sample_size = NA)
+      return(f)
+   }
+   
+   # extract the study design ...
+   study_design = as.character(in_page %>% html_nodes("#StudyDesign") %>% html_nodes("td"))
+   # ... then get the sample size
+   e_index = which(str_detect(string=study_design, pattern='Enrollment'))
+   text = str_remove_all(study_design[e_index+1], pattern='\\n|^<td>|</td>$')
+   split = str_split(string=text, pattern=' ', n=2)
+   if(length(split) == 0){ # for occasional incomplete reports
+      sample_size = NA
+      sample_size_type = ''
+   }
+   if(length(split) > 0){ # for occasional incomplete reports
+      sample_size = as.numeric(split[[1]][1])
+      sample_size_type = str_remove_all(string=split[[1]][2], pattern='[^A-Z|a-z]')
+   }
+   f = data.frame(id = id, date = table$dates[index], status = status, sample_size_type = sample_size_type, sample_size = sample_size)
+   return(f)
+}
 
 # function to replace null with NA, used by clintrials reading
 null_na = function(x, collapse=FALSE, date=FALSE){
@@ -150,8 +192,10 @@ roundz = function(x, digits){
 ## create nice plot of sample size regression model estimates
 # plot target and actual in same plot
 plot_function = function(indata, 
-                         which_outcome, 
                          table_names, 
+                         xlabs = c('Decrease','Increase'), # labels for x-axis
+                         label_location = 'right', # location within plot area for group labels
+                         remove_this_size = 1, # default to remove groups that are just 1 result
                          lsize = 13, # size of labels text
                          label_side = NULL, # side for group labels
                          ljust = 0.5, # justfication of legend at top
@@ -210,14 +254,23 @@ plot_function = function(indata,
       arrange(xaxis) %>%
       unique() %>%
       pull(label)
-   
+
+   # where to put labels    
+   if(label_location == 'right'){
+      put_labels = max(all_res$conf.high, na.rm=T) # put labels at highest CI (right side)
+      h_adjustment = 1 # horizontal adjustment
+   }
+   if(label_location == 'left'){
+      put_labels = min(all_res$conf.high, na.rm=T) # put labels at lowest CI (left side)
+      h_adjustment = 0
+   }
    # labels for groups inside plot area
    group_labels = group_by(all_res, group) %>%
       summarise(n=n(), meanx=mean(xaxis), maxx=max(xaxis)) %>%
       ungroup() %>%
-      filter(n > 1) %>%
+      filter(n > remove_this_size) %>% # remove small labels?
       mutate(
-         estimate = max(all_res$conf.high, na.rm=T), # put labels at highest CI (right side)
+         estimate = put_labels,
          conf.low=0, conf.high=0, reference=1,
          group = ifelse(group=='continuous', 'Continuous variables', group)) # 
    dotted.lines = group_labels$maxx + 0.5 # dotted lines to split groups
@@ -226,8 +279,8 @@ plot_function = function(indata,
    all_res = mutate(all_res,
                     xaxis = ifelse(outcome_num==1, xaxis+gap, xaxis))
    # text for axis labels
-   text1 = data.frame(xaxis=1, estimate=1, conf.low=0, conf.high=0, reference=1, label='Increase')
-   text2 = data.frame(xaxis=1, estimate=1, conf.low=0, conf.high=0, reference=1, label='Decrease')
+   text1 = data.frame(xaxis=1, estimate=1, conf.low=0, conf.high=0, reference=1, label=xlabs[2])
+   text2 = data.frame(xaxis=1, estimate=1, conf.low=0, conf.high=0, reference=1, label=xlabs[1])
    # plot
    star.wars.relative = ggplot(data=all_res, aes(x=xaxis, y=estimate, ymin=conf.low, ymax=conf.high, shape=factor(reference), col=factor(outcome_num)))+
       geom_hline(lty=2, yintercept=0)+ # reference line at zero
@@ -237,7 +290,7 @@ plot_function = function(indata,
       geom_vline(lty=3, xintercept=dotted.lines)+ # breaks between groups of variables
       geom_text(data=text1, aes(x=xaxis, y=estimate, label =label), adj=-0.1, vjust=1, col=grey(0.5))+
       geom_text(data=text2, aes(x=xaxis, y=estimate, label =label), adj=1.1, vjust=1, col=grey(0.5))+
-      geom_text(data=group_labels, aes(x=meanx, y=estimate, label =group), adj=1, col=grey(0.5))+
+      geom_text(data=group_labels, aes(x=meanx, y=estimate, label =group), adj=h_adjustment, col=grey(0.5))+
       scale_x_continuous(expand=c(0.01,0.01), breaks=1:length(axis_labels), labels=axis_labels, limits=c(0.5, length(axis_labels)+gap))+ # plus 0.2 for dodge
       scale_y_continuous(breaks=x_limits, minor_breaks =minor_breaks )+ # 
       ylab('Percent change in sample size')+
@@ -245,6 +298,7 @@ plot_function = function(indata,
       theme_bw()+
       theme(
          legend.position = 'top',
+         legend.justification = 'left',
          legend.box.spacing = unit(0, 'mm'), # reduce space between plot and legend
          legend.box.margin	= margin(t=0, r=0, b=0, l=0), # reduce space around legend
          legend.margin = margin(t=0, r=0, b=0, l=0, unit='mm'), # reduce space around legend
@@ -254,7 +308,8 @@ plot_function = function(indata,
          text = element_text(size=12), 
          axis.text.y = element_text(size=lsize), # size of labels, had to shorten for very large plots
          panel.grid.major.y = element_blank(),
-         panel.grid.minor.y = element_blank())+
+         panel.grid.minor.y = element_blank(),
+         panel.grid.minor.x = element_blank())+
       coord_flip() 
    star.wars.relative
    return(star.wars.relative)

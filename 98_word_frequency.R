@@ -41,6 +41,6 @@ rownames(freqs) = NULL
 # make into a PDF appendix
 rmarkdown::render(input = "98_word_frequency_table.Rmd",
                   output_format = "pdf_document",
-                  output_file = 'S2_Table.pdf') # output to specific file
+                  output_file = 'Supplement_table_3.pdf') # output to specific file
 
 
