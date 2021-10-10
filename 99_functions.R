@@ -198,7 +198,7 @@ plot_function = function(indata,
                          remove_this_size = 1, # default to remove groups that are just 1 result
                          lsize = 13, # size of labels text
                          label_side = NULL, # side for group labels
-                         ljust = 0.5, # justfication of legend at top
+                         ljust = 0.5, # justification of legend at top
                          x_limits = 1:3, # major ticks for x-axis
                          minor_breaks=0 # minor ticks for x-axis
                          ){
@@ -298,12 +298,12 @@ plot_function = function(indata,
       theme_bw()+
       theme(
          legend.position = 'top',
-         legend.justification = 'left',
+         legend.justification = c(ljust,0),
          legend.box.spacing = unit(0, 'mm'), # reduce space between plot and legend
          legend.box.margin	= margin(t=0, r=0, b=0, l=0), # reduce space around legend
          legend.margin = margin(t=0, r=0, b=0, l=0, unit='mm'), # reduce space around legend
-         legend.title=element_text(size=10),
-         legend.text=element_text(size=10),
+         legend.title = element_text(size=10),
+         legend.text = element_text(size=10),
          plot.margin = margin(t=0, r=1, b=1, l=0, unit='mm'), # small space around plot
          text = element_text(size=12), 
          axis.text.y = element_text(size=lsize), # size of labels, had to shorten for very large plots

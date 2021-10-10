@@ -23,6 +23,8 @@ target,allocationN/A,assignmentSingle Group
 load('data/clinicaltrials_analysis_plus.RData') # from 2a_update_clintrials_data.R 
 source('3_prep_clintrials.R')
 
+## sensitivity analysis without cancer trials
+
 ## sensitivity analysis based on post 2006 data only (far fewer missing)
 #for.model = filter(for.model, submitted >= as.Date('2007-01-01'))
 
@@ -169,14 +171,14 @@ all_logical_variables = names(studies[, sapply(studies, class) == 'logical'])
 character_variables = intersect(all_character_variables, unique(vars$variables)) # just the predictors
 logical_variables = intersect(all_logical_variables, unique(vars$variables)) # just the predictors
 for (c in character_variables){
-  temporary = select(studies, all_of(c)) %>% pull(c)  
+  temporary = dplyr::select(studies, all_of(c)) %>% pull(c)  
   categories = unique(temporary)
   categories = categories[!is.na(categories)] # remove missing
   index = vars$variables == c
   vars$categories[index] = paste(categories, collapse=', ', sep='')
 }
 for (c in logical_variables){
-  temporary = select(studies, all_of(c)) %>% pull(c)  
+  temporary = dplyr::select(studies, all_of(c)) %>% pull(c)  
   index = vars$variables == c
   vars$categories[index] = "Yes, No"
 }

@@ -31,7 +31,7 @@ to_plot = plot_function(indata = all_ests,
                         label_location = 'left', # put group labels on left
                         table_names = table_names_clintrials, 
                         remove_this_size = 0, # plot labels for small groups
-                        ljust = 0.5, # move top legend
+                        ljust = 2.2, # move top legend to the left
                         x_limits = seq(-100,0,20),
                         minor_breaks =seq(-100,0,10))
 to_plot = to_plot + 

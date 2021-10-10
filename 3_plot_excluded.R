@@ -1,6 +1,6 @@
 # 3_plot_excluded.R
 # CONSORT style diagram of included/excluded studies
-# April 2021
+# October 2021
 library(dplyr)
 library(ggplot2)
 library(diagram)
@@ -35,7 +35,8 @@ make_diagram_anzctr = function(){
 par(mai=c(0,0,0,0))
 labels = c(paste('Downloaded\n n = ', format(n_start_anzctr, big.mark = ','), sep=''),
            paste('Excluded\n- ', count_anzctr$reason[1], ', n = ', count_anzctr$n[1],
-                 '\n- ', count_anzctr$reason[2], ', n = ', count_anzctr$n[2], sep=''),
+                 '\n- ', count_anzctr$reason[2], ', n = ', count_anzctr$n[2],
+                 '\n- ', count_anzctr$reason[3], ', n = ', count_anzctr$n[3], sep=''),
            paste('Analysed\n n =', format(n_anzctr, big.mark = ','),'\n- Ratio analysis=', format(n_anzctr_ratio,big.mark=',')))
 n_labels = length(labels)
 M = matrix(nrow=n_labels, ncol=n_labels)
@@ -43,10 +44,10 @@ M[3,1] = "' '"
 pos = matrix(data=c(0.29,0.8,
                     0.7,0.5,
                     0.29,0.2), ncol=2, byrow=TRUE)
-sizes=c(1.5,2.3,2.6) / 10
-props = c(0.67,0.5,0.4) # narrower for first and last
-plotmat(M, name=labels, pos=pos, box.type = 'rect', box.size=sizes, box.prop = props, curve = 0, arr.pos=0.85)
-shape::Arrows(x0=0.29, x1=0.45, y0=0.5, y1=0.5, arr.width=0.2, arr.length=0.22, arr.type='triangle')
+sizes=c(1.5,2.5,2.6) / 10
+props = c(0.67,0.5,0.4) # narrower for some
+plotmat(M, name=labels, pos=pos, box.type = 'rect', box.size=sizes, box.prop = props, curve = 0, arr.pos=0.87)
+shape::Arrows(x0=0.29, x1=0.42, y0=0.5, y1=0.5, arr.width=0.2, arr.length=0.22, arr.type='triangle')
 # heading
 text(0.5, 0.95, "ANZCTR", font=2)
 }
@@ -60,7 +61,8 @@ make_diagram_clintrials = function(){
                    '\n- ', count_clintrials$reason[2], ', n = ', count_clintrials$n[2], 
                    '\n- ', count_clintrials$reason[3], ', n = ', count_clintrials$n[3], 
                    '\n- ', count_clintrials$reason[4], ', n = ', count_clintrials$n[4],
-                   '\n- ', count_clintrials$reason[5], ', n = ', count_clintrials$n[5], sep=''),
+                   '\n- ', count_clintrials$reason[5], ', n = ', count_clintrials$n[5],
+                   '\n- ', count_clintrials$reason[6], ', n = ', count_clintrials$n[6], sep=''),
              paste('Analysed\n n =', format(n_clintrials, big.mark = ','),'\n- Ratio analysis=', format(n_clintrials_ratio, big.mark=',')))
   n_labels = length(labels)
   M = matrix(nrow=n_labels, ncol=n_labels)
@@ -72,7 +74,7 @@ make_diagram_clintrials = function(){
   props = c(0.67,0.54,0.40) # narrower for first and last
   plotmat(M, name=labels, pos=pos, box.type = 'rect', box.size=sizes, box.prop = props, curve = 0, arr.pos=0.85)
   shape::Arrows(x0=0.2, x1=0.26, y0=0.5, y1=0.5, arr.width=0.2, arr.length=0.22, arr.type='triangle')
-  shape::Arrows(x0=0.2, x1=0.2, y1=0.29, y0=0.72, arr.width=0.2, arr.length=0.22, arr.type='triangle')
+  shape::Arrows(x0=0.2, x1=0.2, y1=0.28, y0=0.73, arr.width=0.2, arr.length=0.22, arr.type='triangle')
   # heading
   text(0.5, 0.95, "clintrials.gov", font=2)
 }

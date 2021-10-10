@@ -71,7 +71,7 @@ print(xtable(to_table), include.rownames=FALSE)
       
 ### section 2: model ###
 
-source('2_prep_ANZCTR.R') # prepare data for regression model
+source('3_prep_ANZCTR.R') # prepare data for regression model
 for.model = mutate(for.model, samplesize_target = log2(samplesize_target)) # log-transform target sample size
 
 #

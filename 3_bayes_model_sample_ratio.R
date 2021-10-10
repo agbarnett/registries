@@ -1,7 +1,7 @@
 # 3_bayes_model_sample_ratio.R
 # Bayesian model of the ratio between the actual and target sample size (Bland-Altman)
-# for ANZCTR and clintrials.gov; moved to lyra
-# April 2021
+# for ANZCTR and clintrials.gov; moved to lyra but use data management here
+# Oct 2021
 library(R2WinBUGS)
 library(dplyr)
 library(tidyverse)
@@ -10,24 +10,20 @@ library(tidyverse)
 # ANZCTR
 load('data/AnalysisReady.RData') # from 0_read_data_anzctr.R 
 # clintrials
-load('data/clinicaltrials_ratio.RData') # from 0_read_data.R 
-# convert to wide to generate actual to anticipated ratio
-studies = select(all_data, -date, -status) %>%
-  unique() %>%
-  pivot_wider(values_from='sample_size', names_from='sample_size_type') %>%
-  filter(Anticipated > 0) %>% # exclude those who anticipated zero, presuming this is an error
-  rename('number'= 'id', # rename to match ANZCTR format
-  'samplesize_target' = 'Anticipated',
-         'samplesize_actual' = 'Actual')
+load('data/clinicaltrials_analysis_plus.RData') # from 2a_update_clintrials_data.R
+studies = rename(studies, 'number' = 'id') # for clintrials
 
 ## data management
-for.model  = filter(studies, !is.na(samplesize_actual)) %>% # must have actual sample size
+for.model = filter(studies, 
+                   samplesize_target > 0, # presume this small number are errors
+                   !is.na(samplesize_actual)) %>% # must have actual sample size
   mutate(samplesize_target_log = log(samplesize_target+1.1), # add small constant because of zeros, changed to 1.1 for clintrials because of some very small studies
     samplesize_actual_log = log(samplesize_actual+1.1),
     diff = samplesize_actual_log - samplesize_target_log,
     #diff_perc = 100*(exp(diff)-1), # percent difference
     aver = (samplesize_actual_log + samplesize_target_log)/2 ) %>%
-  select(number, samplesize_target_log, samplesize_actual_log, diff, aver )
+  dplyr::select(number, samplesize_target_log, samplesize_actual_log, diff, aver ) %>%
+  filter(!is.na(diff))
 # centre for bugs
 mean_aver = mean(for.model$aver)
 for.model = mutate(for.model, av = aver - mean_aver) # centre

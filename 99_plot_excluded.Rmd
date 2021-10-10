@@ -1,5 +1,5 @@
 ---
-title: "Supplement Figure 3: Flow diagram of the number of studies included and excluded"
+title: "Supplement Figure 3: Flow diagrams of the number of studies included and excluded"
 geometry: margin=2cm
 output: pdf_document
 ---
@@ -19,4 +19,4 @@ make_diagram_anzctr()
 make_diagram_clintrials()
 ```
 
-The numbers available for the actual-to-target ratio analysis are smaller because studies had to provided data for both the actual and sample size.
+The numbers available for the actual-to-target ratio analysis are smaller because studies had to provide data for both the actual and sample size.

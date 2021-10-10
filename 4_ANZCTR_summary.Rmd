@@ -59,6 +59,8 @@ for.missing = dplyr::select(studies, -pub, -time, -ID, -id, -starts_with('n_'))
 vis_dat(for.missing)
 ```
 
+The actual sample size might be missing because the study has yet to complete.
+
 # Registration and dates
 
 ## Registration dates
@@ -384,7 +386,7 @@ There were `r zero.studies` studies with a zero target sample size.
 ## Histogram of sample size
 
 ```{r}
-exclude_large = filter(studies, samplesize_target < 2000) # exclude extremely large genetics study
+exclude_large = filter(studies, samplesize_target < 2000) # exclude large studies
 hplot = ggplot(exclude_large, aes(x=samplesize_target))+
   geom_histogram(fill='chocolate1')+
   xlab('Target sample size')+
@@ -451,7 +453,7 @@ The plot shows the estimated mean and 95% confidence interval on the untransform
 ```{r, fig.width=8, fig.height=9.5}
 to_plot = plot_function(indata=all_ests, 
                         ljust=0.35, # move legend at top
-                        lsize=9, # labels have to be smaller
+                        lsize=8, # labels have to be smaller
                         table_names=table_names_anzctr,
                         x_limits = seq(-100,300,100),
                         minor_breaks = seq(-100,350,50))

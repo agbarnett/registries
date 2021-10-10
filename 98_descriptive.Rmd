@@ -286,7 +286,7 @@ Was longitudinal mentioned in the study description.
 
 ```{r, results='asis'}
 # could add 10% and 90%?
-to.summary = select(studies, n_primary, n_secondary)
+to.summary = dplyr::select(studies, n_primary, n_secondary)
 descr(to.summary, stats=c('fivenum'))
 ```
 
@@ -296,6 +296,14 @@ A small number of studies had a huge number of outcomes.
 ## Study status (clinicaltrials.gov)
 
 ```{r, results='asis'}
+# combine unknown status to match paper (October 2021)
+studies = mutate(studies,
+                 status = case_when( # combine two small categories
+      status == 'Unknown status [Previously: Active, not recruiting]' ~ 'Unknown status',
+      status == 'Unknown status [Previously: Enrolling by invitation]' ~ 'Unknown status',
+      TRUE ~ as.character(status)
+    ))
+#
 with(studies, freq(status, cumul = FALSE, report.nas =FALSE, order='freq')) 
 ```
 
@@ -313,7 +321,7 @@ with(studies, freq(lead_sponsor_class, cumul = FALSE, report.nas =FALSE, order='
 ### Target and achieved sample size (clinicaltrials.gov)
 
 ```{r, results='asis'}
-sample = select(studies, samplesize_target, samplesize_actual) %>%
+sample = dplyr::select(studies, samplesize_target, samplesize_actual) %>%
   rename('Target' = 'samplesize_target',
          'Achieved' = 'samplesize_actual')
 descr(sample, stats='fivenum')
@@ -417,7 +425,7 @@ cplot + xlab('')+
 ### Registration dates (ANZCTR)
 
 ```{r, results='asis'}
-dates = select(studies, submitted, approved, update) %>%
+dates = dplyr::select(studies, submitted, approved, update) %>%
   tidyr::gather(key='date', value='res') %>%
   group_by(date) %>%
   filter(!is.na(res)) %>% # remove missing
@@ -620,7 +628,7 @@ with(studies, freq(control, cumul = FALSE, report.nas =TRUE, order='freq'))
 ### Number of outcomes (ANZCTR)
 
 ```{r, results='asis'}
-to.summary = select(studies, n_primary, n_secondary)
+to.summary = dplyr::select(studies, n_primary, n_secondary)
 descr(to.summary, stats=c('fivenum'))
 ```
 
@@ -731,7 +739,7 @@ There are `r format(length(unique(funding_data$name)), big.mark=',')` funders, h
 ### Target and achieved sample size (ANZCTR)
 
 ```{r, results='asis'}
-sample = select(studies, samplesize_target, samplesize_actual) %>%
+sample = dplyr::select(studies, samplesize_target, samplesize_actual) %>%
   rename('Target' = 'samplesize_target',
          'Achieved' = 'samplesize_actual')
 descr(sample, stats='fivenum')

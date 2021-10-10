@@ -1,7 +1,7 @@
 # 0_read_data_clintrials_xml.R
 # read the clinicaltrials.gov data from XML files using the web
 # version reading XMLs from mega zip file, see https://www.clinicaltrials.gov/ct2/resources/download, from https://clinicaltrials.gov/AllPublicXML.zip 
-# March 2021
+# October 2021
 library(XML)
 library(dplyr)
 library(stringr)
@@ -17,7 +17,7 @@ folders = setdiff(folders, existing_data)
 N = length(folders)
 
 # loop through folders
-for (f in 370:N){ # should be 1:N
+for (f in 1:N){ # should be 1:N
   go = paste('U:/Research/Projects/ihbi/aushsi/aushsi_barnetta/meta.research/ANZCTR/data/AllAPIXML/', folders[f], sep='')
   setwd(go)
   xml_files = dir() # find all xml files in this folder (individual trials)
@@ -45,6 +45,18 @@ for (f in 370:N){ # should be 1:N
   secondary_id = null_na(xml_data$id_info$secondary_id)
   if(length(secondary_id) > 1){stop("Multple secondary IDs")}
   status = null_na(xml_data$overall_status)
+  # exclude terminated studies for safety (new Oct 2021)
+  if(status == 'Terminated'){
+    why_stopped = tolower(str_squish(null_na(xml_data$why_stopped))) # 
+    if(is.na(why_stopped) == FALSE){
+      safety = str_detect('safety|adverse event|death', string = why_stopped)
+      if(safety == TRUE){
+        frame = data.frame(id = id, reason='Safety termination', status=status, study_type = study_type, secondary_id=secondary_id)
+        excluded = bind_rows(excluded, frame)
+        next # move on to next study
+      }
+    }
+  }
   # exclude the following
   exclude = pmax(status=='Withheld' , study_type == 'Expanded Access' , str_detect(string=tolower(secondary_id), 'actrn'), na.rm=TRUE)
   if(exclude == 1){

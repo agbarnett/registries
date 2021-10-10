@@ -45,7 +45,7 @@ stats = group_by(to_plot, database) %>%
 
 # label log axis
 x.labels = c(1,5,50,500,5000,50000,1000000)
-x.ticks = log(x.labels+1)
+x.ticks = log(x.labels+0.1)
 y.labels = c(0.1,0.25,1,4,10) # relative (like a risk ratio); symmetric
 y.ticks = log(y.labels)
 # plot
@@ -79,7 +79,7 @@ to_tile = filter(to_plot, exp(aver) <= 100000) %>%
 # axis
 x.labels = c(1,5,50,500,5000,100000)#,1000000)
 x_labs = str_remove_all(format(x.labels, big.mark=',', scientific = FALSE), ' ')
-x.ticks = log(x.labels+1)
+x.ticks = log(x.labels+0.1) # re-adjustment for log
 y.labels = c(0.001,0.01,0.1,1,10,100,1000) # relative (like a risk ratio); symmetric
 y.ticks = log(y.labels)
 #
@@ -131,10 +131,16 @@ invisible(dev.off())
 save(plus_plot, file='figures/fig2.RData')
 
 # look at results for two reference points (~50 and 500)
-filter(diff.pred, chain==99) %>%
-  mutate(x = exp(av.pred),
+filter(anzctr, chain==99) %>%
+  mutate(sample_size = exp(av.pred + 0.1),
          lower = exp(lower),
          upper = exp(upper)) %>%
-  select(row, x, mean, lower, upper) %>%
-  filter(row %in% c(34,53))
+  select(row, sample_size, mean, lower, upper) %>%
+  filter(row %in% c(26,45))
 
+filter(clintrials, chain==99) %>%
+  mutate(sample_size = exp(av.pred + 0.1),
+         lower = exp(lower),
+         upper = exp(upper)) %>%
+  select(row, sample_size, mean, lower, upper) %>%
+  filter(row %in% c(26,45))

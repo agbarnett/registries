@@ -26,7 +26,7 @@ render(input = "4_bland_altman_ratio_best_model.Rmd",
        output_format = "pdf_document",
        output_file = 'supplement_figure_1.pdf')
 
-# Fig 2
+# Fig 2 
 render(input = "4_plot_jags_chains.Rmd",
        output_format = "pdf_document",
        output_file = 'supplement_figure_2.pdf')
@@ -45,3 +45,5 @@ render(input = "98_xval_errors.Rmd",
 render(input = "98_residuals.Rmd",
          output_format = "pdf_document",
          output_file = 'supplement_figure_5.pdf')
+
+# Table 6 - is in latex

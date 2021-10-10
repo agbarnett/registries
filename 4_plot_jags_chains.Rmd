@@ -10,7 +10,7 @@ library(dplyr)
 library(ggplot2)
 
 # load the results for the best model
-load("//hpc-fs/barnetta/anzctr/results/fp.best.t.RData")
+load("//hpc-fs/barnetta/anzctr/results/fp.best.t.clintrials.RData")
 num.chains = 2
 MCMC = 5000
 nrow = 2

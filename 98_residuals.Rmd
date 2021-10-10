@@ -25,7 +25,7 @@ clintrials_colour = 'cadetblue2'
 
 ```{r, fig.width=6, fig.height=3}
 # get the results
-load('results/ANZCTR_sample_size.RData')
+load('results/ANZCTR_sample_size.RData') # from 3_elasticnet_model_samplesize_ANZCTR.R
 #
 all_res = NULL
 for (outcome_type in c('target','actual')){ # get residuals for both 
@@ -55,7 +55,7 @@ The x- and y-axes vary by panel.
 
 ```{r, fig.width=6, fig.height=3}
 # get the results
-load('results/clintrials_sample_size.RData') # from 2_elasticnet_model_samplesize_clintrial.R
+load('results/clintrials_sample_size.RData') # from 3_elasticnet_model_samplesize_clintrial.R
 #
 all_res = NULL
 for (outcome_type in c('target','actual')){ # get residuals for both 

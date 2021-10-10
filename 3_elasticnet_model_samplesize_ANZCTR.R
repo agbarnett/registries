@@ -1,9 +1,10 @@
 # 3_elasticnet_model_samplesize_ANZCTR.R
 # elastic net model for predicting target sample size
 # version for ANZCTR data
-# used by 4_anzctr_summary.Rmd
-# April 2021
+# used by 4_anzctr_summary.Rmd and 98_residuals.Rmd
+# October 2021
 library(dplyr)
+library(tidyselect)
 library(ggplot2)
 library(glmnet)
 library(broom)
@@ -44,7 +45,6 @@ for (otype in otypes){
   this_vars = data.frame(variables = vars_to_include)
   vars = bind_rows(vars, this_vars) # for variable summary table
 
-  
   # formula without intercept:
   formula = paste('log(samplesize_target) ~ -1 +', paste(vars_to_include, collapse = '+'))
   
@@ -60,6 +60,9 @@ for (otype in otypes){
     n_missing_outcome = sum(is.na(this_data$samplesize_actual))
     this_data = filter(this_data, !is.na(samplesize_actual))
   }
+  
+  ## sensitivity analysis, remove cancer (Oct 2021)
+  #this_data = filter(this_data, ccode1 != 'Cancer')
   
   # prepare data for glmnet
 X = model.matrix(as.formula(formula), data=this_data)
@@ -77,7 +80,7 @@ if(otype=='actual'){y = log(this_data$samplesize_actual+1)}
 
 # run model
 enet_model = glmnet(y=y, x=X, alpha=0.95) #
-plot(lasso_model, main=otype)
+plot(enet_model, main=otype)
 
 # x-validation to find best cut-off
 cv_enet_xval = cv.glmnet(y=y, x=X, alpha=0.95)
@@ -119,6 +122,7 @@ if(ncol(X.dash)>0){ # in any variables remaining
     mutate(term = str_remove(string=term, pattern='X.dash'),
            outcome = otype) # add outcome
   all_ests = bind_rows(all_ests, standard_model_ests) # concatenate nicely formatted estimates
+  standard_models[[mtype]] = standard_model # concatenate entire model
 }
 if(ncol(X.dash)==0){ # in no variables remaining
   standard_model = NULL
@@ -135,7 +139,9 @@ if(is.null(standard_model) == FALSE){
 
 # save processed data and mode estimates
 which_data = 'anzctr'
-save(which_data, numbers, standard_models, all_ests, variables_excluded, vif, colinear, xval, file='results/ANZCTR_sample_size.RData')
+outfile = 'results/ANZCTR_sample_size.RData' # original results
+#outfile = 'results/ANZCTR_no_cancer_sample_size.RData' # sensitivity analysis
+save(which_data, numbers, standard_models, all_ests, variables_excluded, vif, colinear, xval, file=outfile)
 
 ## save variable list and which were log-transformed
 # list of log-transformed variables
@@ -151,14 +157,14 @@ all_logical_variables = names(studies[, sapply(studies, class) == 'logical'])
 character_variables = intersect(all_character_variables, unique(vars$variables)) # just the predictors
 logical_variables = intersect(all_logical_variables, unique(vars$variables)) # just the predictors
 for (c in character_variables){
-  temporary = select(studies, all_of(c)) %>% pull(c)  
+  temporary = dplyr::select(studies, all_of(c)) %>% pull(c)  
   categories = unique(temporary)
   categories = categories[!is.na(categories)] # remove missing
   index = vars$variables == c
   vars$categories[index] = paste(categories, collapse=', ', sep='')
 }
 for (c in logical_variables){
-  temporary = select(studies, all_of(c)) %>% pull(c)  
+  temporary = dplyr::select(studies, all_of(c)) %>% pull(c)  
   index = vars$variables == c
   vars$categories[index] = "Yes, No"
 }

@@ -41,7 +41,7 @@ g.theme = theme_bw() + theme(panel.grid.minor = element_blank())
 cbPalette <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#999999", "#CC79A7")
 
 # get the data
-load('data/clinicaltrials_analysis_ready.RData') # from 1_process_clintrials_data.R 
+load('data/clinicaltrials_analysis_plus.RData') # from 2a_update_clintrials_data.R
 ```
 
 There were `r length(excluded)` studies excluded.
@@ -90,13 +90,13 @@ The summary statistics are the median and inter-quartile range.
 
 # Inclusions/Exclusions
 
-## Gender included
+## Sex included
 
 ```{r, results='asis'}
 with(studies, freq(gender, cumul = FALSE, report.nas =TRUE))
 ```
 
-#### Gender over time
+#### Sex over time
 
 ```{r}
 to_plot = mutate(studies, year = as.numeric(format(posted, '%Y'))) %>%
@@ -259,33 +259,29 @@ with(studies, freq(lead_sponsor_class, cumul = FALSE, report.nas =FALSE, order='
 
 # Sample size
 
-## Actual and achieved sample size
+## Target and achieved sample size
 
 ```{r, results='asis'}
-sample = select(studies, status, sample_size, sample_size_type) %>%
-  filter(!status=='Withdrawn' | sample_size_type =='Anticipated') # exclude those withdrawn with an actual sample size (often zero)
-stby(data = sample, 
-           INDICES = sample$sample_size_type, 
-           FUN = descr, stats = "fivenum", transpose = TRUE)
-zero.studies = nrow(filter(studies, sample_size == 0))
+sample = select(studies, samplesize_target, samplesize_actual) %>%
+  rename('Target' = 'samplesize_target',
+         'Achieved' = 'samplesize_actual')
+descr(sample, stats='fivenum')
+zero.studies = nrow(filter(studies, samplesize_target == 0))
 ```
 
 The table shows summary statistics.
 
-There were `r zero.studies` studies with a zero sample size.
+There were `r zero.studies` studies with a zero target sample size.
 
 
 ## Histogram of sample size
 
 ```{r, fig.width=8}
-exclude_large = filter(studies, sample_size < 2000) # exclude extremely large genetics study
-
-#
-hplot = ggplot(exclude_large, aes(x=sample_size))+
+exclude_large = filter(studies, samplesize_target < 2000) # exclude large studies
+hplot = ggplot(exclude_large, aes(x=samplesize_target))+
   geom_histogram(fill='chocolate1')+
-  xlab('Sample size')+
-  g.theme+
-  facet_wrap(~sample_size_type, scales='free_y')
+  xlab('Target sample size')+
+  g.theme
 hplot
 ```
 
@@ -295,24 +291,22 @@ The plot above is for the `r format(nrow(exclude_large), big.mark=',')` studies 
 ### Histogram looking for digit preference in target sample size
 
 ```{r, fig.width=8}
-# exclude huge studies
-exclude_large = filter(studies, sample_size <= 200) # exclude extremely large genetics study
+# exclude some studies for this plot
+exclude_large = filter(studies, samplesize_target <= 200) # 
 # frequency
-digits = group_by(exclude_large, sample_size_type, sample_size) %>%
+digits = group_by(exclude_large, samplesize_target) %>%
   summarise(n=n()) %>%
   ungroup() 
-top_five = group_by(digits, sample_size_type) %>% # per type (facet)
-  arrange(-n) %>%
+top_five = arrange(digits, -n) %>%
   slice(1:5) %>% # top 5 per facet
   ungroup()
 # plot
-hplot = ggplot(digits, aes(x=sample_size, y=n))+
+hplot = ggplot(digits, aes(x=samplesize_target, y=n))+
   geom_bar(stat="identity", col='chocolate2')+
   xlab('Sample size')+
   ylab('Number of studies')+
-  geom_label(data=top_five, aes(x=sample_size, y=n, label=sample_size))+
-  g.theme+
-  facet_wrap(~sample_size_type, scales='free_y')
+  geom_label(data=top_five, aes(x=samplesize_target, y=n, label=samplesize_target))+
+  g.theme
 hplot
 jpeg('figures/digit_preference_clintrials.jpg', width=5, height=4, units='in', res=300)
 print(hplot)
@@ -335,7 +329,7 @@ if(is_results == TRUE){
   load('results/clintrials_sample_size.RData') # sensitivity analysis
 }
 if(is_results == FALSE){
-  source('2_elasticnet_model_samplesize_clintrial.R')
+  source('3_elasticnet_model_samplesize_clintrial.R')
 }
 # get the labels
 load('data/labels.RData') # from 0_labels.R

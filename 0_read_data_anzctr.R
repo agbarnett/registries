@@ -1,13 +1,16 @@
 # 0_read_data_anzctr.R
 # read the ANZCTR data from XML files; takes a while to run
-# December 2020
+# handy document: https://www.anzctr.org.au/docs/ANZCTR%20Data%20field%20explanation.pdf
+# data downloaded from https://www.anzctr.org.au/TrialSearch.aspx using empty search, then "download all to XML" button 
+# search on 1-Feb-2021 returned 28,589 studies
+# October 2021
 library(XML)
 library(stringr)
 library(dplyr)
 source('99_functions.R')
-censor.date = as.Date('2020-11-12') # date that these data were downloaded by me from ANZCTR
+censor.date = as.Date('2020-02-01') # date that these data were downloaded by me from ANZCTR
 
-# institution data, from here https://www.grid.ac/
+# institution data, from here https://www.grid.ac/ (not yet using)
 inst = read.csv('data/grid-2019-10-06/grid.csv', stringsAsFactors = FALSE) %>%
   filter(Country == 'Australia') %>%
   mutate(Name = str_replace_all(Name, pattern='[^a-zA-Z0-9]', replace=' ')) # replace all non-numbers and letters
@@ -21,6 +24,15 @@ studies  = ethics_data = funding_data = excluded = NULL
 for (k in 1:N){ # loop through files
   data <- xmlParse(paste('data/anzdata/', list.of.files[k], sep=''))
   xml_data <- xmlToList(data)
+  
+  ## do not include observational studies (not in the excluded pile as they are not in the inclusion criteria)
+  study_type = ifelse(is.null(xml_data$trial_design$studytype), NA, xml_data$trial_design$studytype)
+  if(is.na(study_type) == TRUE){
+    next # skip to next study
+  }
+  if(study_type == "Observational"){
+    next # skip to next study
+  }
   
   ## trial number and dates
   number = xml_data$actrnumber
@@ -41,6 +53,7 @@ for (k in 1:N){ # loop through files
     excluded = bind_rows(excluded, eframe)
     next # skip to next study
   }
+  
 
   ## Exclude if not in Australia or NZ - decided to keep studies outside Australia
   # any Australian / NZ recruitment
@@ -92,7 +105,8 @@ for (k in 1:N){ # loop through files
     age_max_type = res_max$type
     age_max = res_max$num
   }
-
+  volunteers = null_na(xml_data$eligibility$healthyvolunteer)
+  
   ## funding (may by multiple), does not include sponsors
   n_funding = 0  # start with zero
   if(any(names(xml_data$sponsorship) == 'fundingsource') == TRUE){ # 
@@ -118,7 +132,7 @@ for (k in 1:N){ # loop through files
   ccode2 = ifelse(is.null(xml_data$conditions$conditioncode$conditioncode2) == TRUE, NA, xml_data$conditions$conditioncode$conditioncode2)
 
   ## design
-  study_type = ifelse(is.null(xml_data$trial_design$studytype), NA, xml_data$trial_design$studytype)
+  allocation = ifelse(is.null(xml_data$trial_design$allocation), NA, xml_data$trial_design$allocation)
   purpose = ifelse(is.null(xml_data$trial_design$purpose), NA, xml_data$trial_design$purpose)
   masking = ifelse(is.null(xml_data$trial_design$masking), NA, xml_data$trial_design$masking)
   assignment = ifelse(is.null(xml_data$trial_design$assignment), NA, xml_data$trial_design$assignment)
@@ -126,6 +140,12 @@ for (k in 1:N){ # loop through files
   phase = ifelse(is.null(xml_data$recruitment$phase), NA, xml_data$recruitment$phase)
   control = ifelse(is.null(xml_data$interventions$control), NA, xml_data$interventions$control)
   intervention_code = ifelse(is.null(xml_data$interventions$interventioncode), NA, xml_data$interventions$interventioncode)
+  
+  ## observational only design - no longer used
+  #purposeobs = ifelse(is.null(xml_data$trial_design$purposeobs), NA, xml_data$trial_design$purposeobs)
+  #duration = ifelse(is.null(xml_data$trial_design$duration), NA, xml_data$trial_design$duration)
+  #selection = ifelse(is.null(xml_data$trial_design$selection), NA, xml_data$trial_design$selection)
+  #timing = ifelse(is.null(xml_data$trial_design$timing), NA, xml_data$trial_design$timing)
   
   # sample size
   samplesize_target = ifelse(is.null(xml_data$recruitment$samplesize), NA, xml_data$recruitment$samplesize)
@@ -139,6 +159,18 @@ for (k in 1:N){ # loop through files
   
   ## study status and any publication (not used publication so far)
   study_status = ifelse(is.null(xml_data$recruitment$recruitmentstatus), NA, xml_data$recruitment$recruitmentstatus)
+  # added October 2021
+  if(study_status == 'Stopped early'){
+    reason = ifelse(is.null(xml_data$recruitment$withdrawnreason), NA, xml_data$recruitment$withdrawnreason) # look for `Reason for early stopping/withdrawal`
+    if(is.na(reason) == FALSE){
+      safety = str_detect('safety|adverse event|death', string = tolower(reason))
+      if(safety == TRUE){
+        eframe = data.frame(number=number, reason='Safety termination')
+        excluded = bind_rows(excluded, eframe)
+        next # move on to next study
+      }
+    }
+  }
   pub = is.null(xml_data$ethicsAndSummary$publication) == FALSE
   pub = factor(as.numeric(pub), levels=0:1, labels=c('No','Yes'))
   
@@ -172,9 +204,11 @@ for (k in 1:N){ # loop through files
                      n_primary = n_primary, n_secondary = n_secondary,
                      gender=gender, age_min_type=age_min_type, age_max_type=age_max_type,
                      age_min=age_min, age_max=age_max,
-                     study_type = study_type, purpose = purpose,
-                     masking = masking, assignment=assignment, endpoint=endpoint,
+                     volunteers = volunteers,
+                     purpose = purpose,
+                     allocation = allocation, masking = masking, assignment=assignment, endpoint=endpoint,
                      phase=phase, 
+                     #purposeobs = purposeobs, duration = duration, selection = selection, timing = timing, # observational features, no longer used
                      samplesize_target = samplesize_target, samplesize_actual = samplesize_actual,
                      start_anticipated=start_anticipated, end_date=end_date, 
                      study_status = study_status, pub=pub, 
@@ -191,8 +225,8 @@ for (k in 1:N){ # loop through files
 # general additions and fixes
 studies = mutate(studies, 
                  ID = 1:n(), # simple ID per row
-                 provisional = str_detect(string=number, pattern='p$'), # provisional has a `p` at the end
-                 provisional = factor(as.numeric(provisional), levels=0:1, labels=c('No','Yes')),
+                 #provisional = str_detect(string=number, pattern='p$'), # provisional has a `p` at the end # dropped, not sure of value
+                 #provisional = factor(as.numeric(provisional), levels=0:1, labels=c('No','Yes')),
                  gender = ifelse(gender=='Both males and females', 'All', gender), # to match clintrials style
                  submitted = as.Date(submitted, origin='1970-01-01'),
                  approved = as.Date(approved, origin='1970-01-01'),
@@ -201,7 +235,7 @@ studies = mutate(studies,
                  time = as.numeric(censor.date - end_date), # calculate time to publication (not yet used)
                  samplesize_target = as.numeric(samplesize_target),
                  samplesize_actual = as.numeric(samplesize_actual),
-# error in intervention code (capital "D")
+# fix error in intervention code (capital "D")
 intervention_code = ifelse(intervention_code=='Early Detection / Screening', 'Early detection / Screening', intervention_code),
                  # tidy up free-text condition
                  condition = tolower(condition), # to avoid distinct categories for same condition
@@ -267,8 +301,7 @@ ethics_data=  mutate(ethics_data, event = case_when(
 save(studies, excluded, censor.date, funding_data, ethics_data, file='data/AnalysisReady.RData')
 
 # save smaller version for shiny
-studies = filter(studies, study_type=='Interventional') %>% # exclude observational
-          select(ID, control, purpose, phase, endpoint, ccode1,
+studies = select(studies, ID, control, purpose, phase, endpoint, ccode1,
                  intervention_code, assignment, 
                  samplesize_target, samplesize_actual) %>%
   tidyr::gather(`samplesize_target`, `samplesize_actual`, key='sample_size_type', value='sample_size') %>% # format to match clinicaltrials.gov

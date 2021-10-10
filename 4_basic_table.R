@@ -1,6 +1,6 @@
 # 4_basic_table.R
 # output basic study characteristic table in latex
-# January 2021
+# October 2021
 library(xtable) # for latex
 library(ggplot2)
 library(dplyr)
@@ -17,7 +17,9 @@ anzctr = select(for.model, submitted, gender, study_status, age_limit_min, age_l
 load('data/clinicaltrials_analysis_plus.RData') # from 2a_update_clintrials_data.R
 source('3_prep_clintrials.R')
 clintrials = select(for.model, submitted, status, gender, age_limit_min, age_limit_max, n_primary, n_secondary, "samplesize_actual", "samplesize_target") %>%
-  mutate(database = 'clintrials') %>%
+  mutate(database = 'clintrials',
+         status = as.character(status),
+         status = ifelse(str_detect(pattern='^Unknown status', status)==TRUE, 'Unknown status', status)) %>%
   rename('study_status' = 'status') # to be consistent
 #
 to_table = bind_rows(anzctr, clintrials)

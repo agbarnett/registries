@@ -1,6 +1,6 @@
 # 3_prep_clintrials.R
 # Prepare data for regression models (used by 4_basic_table.R, 3_elasticnet_model_samplesize_clintrial.R)
-# February 2021
+# October 2021
 
 ## Prepare data for regression model
 # change missing to a category
@@ -54,10 +54,15 @@ for.model = mutate(studies,
       status == 'Temporarily not available' ~ 'Not available',
       TRUE ~ as.character(status)
     ),
+    status = case_when( # combine two small categories
+      status == 'Unknown status [Previously: Active, not recruiting]' ~ 'Unknown status',
+      status == 'Unknown status [Previously: Enrolling by invitation]' ~ 'Unknown status',
+      TRUE ~ as.character(status)
+    ),
     status = relevel(factor(status), ref='Completed'),
     age_limit_max = relevel(factor(age_limit_max), ref='No limit'),
     age_limit_min = relevel(factor(age_limit_min), ref='No limit')
     #study_design_observational = relevel(factor(study_design_observational), ref='Cohort'),
     #study_design_time = relevel(factor(study_design_time), ref='Prospective')
     ) %>%
-  select(-age_min_type, -age_min, -age_max_type, -age_max)
+  dplyr::select(-age_min_type, -age_min, -age_max_type, -age_max)
